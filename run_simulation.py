@@ -4,8 +4,20 @@ import taichi as ti
 import numpy as np
 from config_builder import SimConfig
 from particle_system import ParticleSystem
+from DFSPH import DFSPHSolver
+from WCSPH import WCSPHSolver
+
 
 ti.init(arch=ti.gpu, device_memory_fraction=0.5)
+
+def build_solver(ps: ParticleSystem):
+    solver_type = ps.cfg.get_cfg("simulationMethod")
+    if solver_type == 0:
+        return WCSPHSolver(ps)
+    elif solver_type == 4:
+        return DFSPHSolver(ps)
+    else:
+        raise NotImplementedError(f"Solver type {solver_type} has not been implemented.")
 
 
 if __name__ == "__main__":
@@ -31,7 +43,8 @@ if __name__ == "__main__":
 
 
     ps = ParticleSystem(config, GGUI=True)
-    solver = ps.build_solver()
+
+    solver = build_solver(ps)
     solver.initialize()
 
     window = ti.ui.Window('SPH', (1024, 1024), show_window = True, vsync=False)

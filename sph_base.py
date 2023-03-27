@@ -1,11 +1,12 @@
 from matplotlib.pyplot import axis
 import taichi as ti
 import numpy as np
+from particle_system import ParticleSystem
 
 
 @ti.data_oriented
 class SPHBase:
-    def __init__(self, particle_system):
+    def __init__(self, particle_system: ParticleSystem):
         self.ps = particle_system
         self.g = ti.Vector([0.0, -9.81, 0.0])  # Gravity
         if self.ps.dim == 2:

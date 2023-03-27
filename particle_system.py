@@ -3,8 +3,6 @@ import numpy as np
 import trimesh as tm
 from functools import reduce
 from config_builder import SimConfig
-from WCSPH import WCSPHSolver
-from DFSPH import DFSPHSolver
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
 @ti.data_oriented
@@ -209,16 +207,7 @@ class ParticleSystem:
                                np.array([0 for _ in range(num_particles_obj)], dtype=np.int32), # material is solid
                                is_dynamic * np.ones(num_particles_obj, dtype=np.int32), # is_dynamic
                                np.stack([color for _ in range(num_particles_obj)])) # color
-    
 
-    def build_solver(self):
-        solver_type = self.cfg.get_cfg("simulationMethod")
-        if solver_type == 0:
-            return WCSPHSolver(self)
-        elif solver_type == 4:
-            return DFSPHSolver(self)
-        else:
-            raise NotImplementedError(f"Solver type {solver_type} has not been implemented.")
 
     @ti.func
     def add_particle(self, p, obj_id, x, v, density, pressure, material, is_dynamic, color):

@@ -1,9 +1,10 @@
 import taichi as ti
 from sph_base import SPHBase
+from particle_system import ParticleSystem
 
 
 class DFSPHSolver(SPHBase):
-    def __init__(self, particle_system):
+    def __init__(self, particle_system: ParticleSystem):
         super().__init__(particle_system)
         
         self.surface_tension = 0.01
@@ -396,8 +397,13 @@ class DFSPHSolver(SPHBase):
             if self.ps.is_dynamic[p_i] and self.ps.material[p_i] == self.ps.material_fluid:
                 self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
 
+    @ti.kernel
+    def clear_acceleration(self):
+        for p_i in ti.grouped(self.ps.x):
+            self.ps.acceleration[p_i].fill(0.0)
 
     def substep(self):
+        # self.clear_acceleration()
         self.compute_densities()
         self.compute_DFSPH_factor()
         if self.enable_divergence_solver:
