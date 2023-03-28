@@ -20,7 +20,8 @@ class ParticleSystem:
         self.domain_size = self.domian_end - self.domain_start
 
         self.dim = len(self.domain_size)
-        assert self.dim > 1
+        # currently only 3-dim simulations are supported
+        assert self.dim == 3
         # Simulation method
         self.simulation_method = self.cfg.get_cfg("simulationMethod")
 
@@ -80,6 +81,11 @@ class ParticleSystem:
         self.particle_max_num = fluid_particle_num + rigid_particle_num
         self.num_rigid_bodies = len(rigid_blocks)+len(rigid_bodies)
 
+        self.num_objects = self.num_rigid_bodies + len(fluid_blocks)
+        if len(rigid_blocks) > 0:
+            print("Warning: currently rigid block functions are not completed, may lead to unexpected behaviour")
+            input("Press Enter to continue")
+
         #### TODO: Handle the Particle Emitter ####
         # self.particle_max_num += emitted particles
         print(f"Current particle num: {self.particle_num[None]}, Particle max num: {self.particle_max_num}")
@@ -88,7 +94,20 @@ class ParticleSystem:
         # Rigid body properties
         if self.num_rigid_bodies > 0:
             # TODO: Here we actually only need to store rigid boides, however the object id of rigid may not start from 0, so allocate center of mass for all objects
-            self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_rigid_bodies + len(fluid_blocks))
+            self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float, shape=self.num_objects)
+            self.rigid_x = ti.Vector.field(self.dim, dtype=float, shape=self.num_objects)
+            self.rigid_v0 = ti.Vector.field(self.dim, dtype=float, shape=self.num_objects)
+            self.rigid_v = ti.Vector.field(self.dim, dtype=float, shape=self.num_objects)
+            self.rigid_quaternion = ti.Vector.field(4, dtype=float, shape=self.num_objects)
+            self.rigid_omega = ti.Vector.field(3, dtype=float, shape=self.num_objects)
+            self.rigid_omega0 = ti.Vector.field(3, dtype=float, shape=self.num_objects)
+            self.rigid_force = ti.Vector.field(self.dim, dtype=float, shape=self.num_objects)
+            self.rigid_torque = ti.Vector.field(self.dim, dtype=float, shape=self.num_objects)
+            self.rigid_mass = ti.field(dtype=float, shape=self.num_objects)
+            self.rigid_inertia = ti.Matrix.field(m=3, n=3, dtype=float, shape=self.num_objects)
+            self.rigid_inertia0 = ti.Matrix.field(m=3, n=3, dtype=float, shape=self.num_objects)
+            self.rigid_inv_mass = ti.field(dtype=float, shape=self.num_objects)
+            self.rigid_inv_inertia = ti.Matrix.field(m=3, n=3, dtype=float, shape=self.num_objects)
 
         # Particle num of each grid
         self.grid_particles_num = ti.field(int, shape=int(self.grid_num[0]*self.grid_num[1]*self.grid_num[2]))
@@ -173,9 +192,14 @@ class ParticleSystem:
             end = np.array(rigid["end"]) + offset
             scale = np.array(rigid["scale"])
             velocity = rigid["velocity"]
+            angular_velocity = rigid["angularVelocity"]
             density = rigid["density"]
             color = rigid["color"]
             is_dynamic = rigid["isDynamic"]
+            self.rigid_v[obj_id] = velocity
+            self.rigid_v0[obj_id] = velocity
+            self.rigid_omega[obj_id] = angular_velocity
+            self.rigid_omega0[obj_id] = angular_velocity
             self.add_cube(object_id=obj_id,
                           lower_corner=start,
                           cube_size=(end-start)*scale,
@@ -194,10 +218,19 @@ class ParticleSystem:
             is_dynamic = rigid_body["isDynamic"]
             if is_dynamic:
                 velocity = np.array(rigid_body["velocity"], dtype=np.float32)
+                if "angularVelocity" in rigid_body:
+                    angular_velocity = np.array(rigid_body["angularVelocity"], dtype=np.float32)
+                else:
+                    angular_velocity = np.array([0.0 for _ in range(self.dim)], dtype=np.float32)
             else:
                 velocity = np.array([0.0 for _ in range(self.dim)], dtype=np.float32)
+                angular_velocity = np.array([0.0 for _ in range(self.dim)], dtype=np.float32)
             density = rigid_body["density"]
             color = np.array(rigid_body["color"], dtype=np.int32)
+            self.rigid_v[obj_id] = velocity
+            self.rigid_v0[obj_id] = velocity
+            self.rigid_omega[obj_id] = angular_velocity
+            self.rigid_omega0[obj_id] = angular_velocity
             self.add_particles(obj_id,
                                num_particles_obj,
                                np.array(voxelized_points_np, dtype=np.float32), # position
@@ -482,3 +515,21 @@ class ParticleSystem:
         density_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), density if density is not None else 1000.)
         pressure_arr = np.full_like(np.zeros(num_new_particles, dtype=np.float32), pressure if pressure is not None else 0.)
         self.add_particles(object_id, num_new_particles, new_positions, velocity_arr, density_arr, pressure_arr, material_arr, is_dynamic_arr, color_arr)
+
+
+    # add for debug
+    def print_rigid_info(self):
+        for r in self.object_id_rigid_body:
+            print("object ", r)
+            print("x", self.rigid_x[r])
+            print("x0", self.rigid_rest_cm[r])
+            print("v", self.rigid_v[r])
+            print("v0", self.rigid_v0[r])
+            print("w", self.rigid_omega[r])
+            print("w0", self.rigid_omega0[r])
+            print("q", self.rigid_quaternion[r])
+
+            print("m", self.rigid_mass[r])
+            print("I", self.rigid_inertia[r])
+            print("f", self.rigid_force[r])
+            print("t", self.rigid_torque[r])

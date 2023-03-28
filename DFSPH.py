@@ -8,7 +8,6 @@ class DFSPHSolver(SPHBase):
         super().__init__(particle_system)
         
         self.surface_tension = 0.01
-        self.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
 
         self.enable_divergence_solver = True
 
@@ -91,9 +90,6 @@ class DFSPHSolver(SPHBase):
     @ti.kernel
     def compute_non_pressure_forces(self):
         for p_i in ti.grouped(self.ps.x):
-            if self.ps.is_static_rigid_body(p_i):
-                self.ps.acceleration[p_i].fill(0.0)
-                continue
             ############## Body force ###############
             # Add body force
             d_v = ti.Vector(self.g)
@@ -309,7 +305,10 @@ class DFSPHSolver(SPHBase):
                 vel_change =  -self.dt[None] * 1.0 * ret.k_i * grad_p_j
                 ret.dv += vel_change
                 if self.ps.is_dynamic_rigid_body(p_j):
-                    self.ps.acceleration[p_j] += -vel_change * (1 / self.dt[None]) * self.ps.density[p_i] / self.ps.density[p_j]
+                    r_id = self.ps.object_id[p_j]
+                    force = -vel_change * (1 / self.dt[None]) * self.ps.density[p_i] * self.ps.m_V[p_i]
+                    self.ps.rigid_force[r_id] += force
+                    self.ps.rigid_torque[r_id] += (self.ps.x[p_j] - self.ps.rigid_x[r_id]).cross(force)
 
 
     def pressure_solve(self):
@@ -387,7 +386,10 @@ class DFSPHSolver(SPHBase):
                 vel_change = - self.dt[None] * 1.0 * k_i * grad_p_j  # kj already contains inverse density
                 self.ps.v[p_i] += vel_change
                 if self.ps.is_dynamic_rigid_body(p_j):
-                    self.ps.acceleration[p_j] += -vel_change * 1.0 / self.dt[None] * self.ps.density[p_i] / self.ps.density[p_j] 
+                    r_id = self.ps.object_id[p_j]
+                    force = -vel_change * (1 / self.dt[None]) * self.ps.density[p_i] * self.ps.m_V[p_i]
+                    self.ps.rigid_force[r_id] += force
+                    self.ps.rigid_torque[r_id] += (self.ps.x[p_j] - self.ps.rigid_x[r_id]).cross(force)
 
 
     @ti.kernel
@@ -403,7 +405,6 @@ class DFSPHSolver(SPHBase):
             self.ps.acceleration[p_i].fill(0.0)
 
     def substep(self):
-        # self.clear_acceleration()
         self.compute_densities()
         self.compute_DFSPH_factor()
         if self.enable_divergence_solver:
