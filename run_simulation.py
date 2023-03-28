@@ -12,9 +12,10 @@ ti.init(arch=ti.gpu, device_memory_fraction=0.5)
 
 def build_solver(ps: ParticleSystem):
     solver_type = ps.cfg.get_cfg("simulationMethod")
-    if solver_type == 0:
-        return WCSPHSolver(ps)
-    elif solver_type == 4:
+    # if solver_type == 0:
+    #     return WCSPHSolver(ps)
+    # elif solver_type == 4:
+    if solver_type == 4:
         return DFSPHSolver(ps)
     else:
         raise NotImplementedError(f"Solver type {solver_type} has not been implemented.")
