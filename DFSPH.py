@@ -84,7 +84,10 @@ class DFSPHSolver(SPHBase):
                 r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(r)
             ret += f_v
             if self.ps.is_dynamic_rigid_body(p_j):
-                self.ps.acceleration[p_j] += -f_v * self.ps.density[p_i] / self.ps.density[p_j]
+                r_id = self.ps.object_id[p_j]
+                force = -f_v * self.ps.density[p_i] * self.ps.m_V[p_i]
+                self.ps.rigid_force[r_id] += force
+                self.ps.rigid_torque[r_id] += (self.ps.x[p_j] - self.ps.rigid_x[r_id]).cross(force)
 
 
     @ti.kernel
@@ -104,8 +107,6 @@ class DFSPHSolver(SPHBase):
         # Update position
         for p_i in ti.grouped(self.ps.x):
             if self.ps.is_dynamic[p_i]:
-                if self.ps.is_dynamic_rigid_body(p_i):
-                    self.ps.v[p_i] += self.dt[None] * self.ps.acceleration[p_i]
                 self.ps.x[p_i] += self.dt[None] * self.ps.v[p_i]
     
 
