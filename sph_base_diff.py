@@ -55,6 +55,16 @@ class SPHBase:
         self.dt = ti.field(float, shape=())
         self.dt[None] = self.ps.cfg.get_cfg("timeStepSize")
 
+        self.inv_dt = ti.field(float, shape=())
+        self.inv_dt[None] = 1.0 / self.dt[None]
+        self.inv_dt2 = ti.field(float, shape=())
+        self.inv_dt2[None] = self.inv_dt[None] * self.inv_dt[None]
+
+        self.step_num = ti.field(int, shape=())
+        self.iter_num = ti.field(int, shape=())
+        self.step_num[None] = 0
+        self.iter_num[None] = 0
+
     @ti.func
     def cubic_kernel(self, r_norm):
         res = ti.cast(0.0, ti.f32)
@@ -105,15 +115,15 @@ class SPHBase:
     @ti.func
     def viscosity_force(self, p_i, p_j, r):
         # Compute the viscosity force contribution
-        v_xy = (self.ps.v[p_i] -
-                self.ps.v[p_j]).dot(r)
-        res = 2 * (self.ps.dim + 2) * self.viscosity * (self.ps.m[p_j] / (self.ps.density[p_j])) * v_xy / (
+        v_xy = (self.ps.v[self.step_num[None], self.iter_num[None], p_i] -
+                self.ps.v[self.step_num[None], self.iter_num[None], p_j]).dot(r)
+        res = 2 * (self.ps.dim + 2) * self.viscosity * (self.ps.m[self.step_num[None], p_j] / (self.ps.density[self.step_num[None], p_j])) * v_xy / (
             r.norm()**2 + 0.01 * self.ps.support_radius**2) * self.cubic_kernel_derivative(
                 r)
         return res
 
     def initialize(self):
-        self.ps.initialize_particle_system()
+        self.ps.initialize_particle_system(0, 0)
         for r_obj_id in self.ps.object_id_rigid_body:
             self.compute_rigid_rest_cm(r_obj_id)
         self.initialize_rigid_info()
@@ -125,28 +135,28 @@ class SPHBase:
     @ti.kernel
     def initialize_rigid_info(self):
         # call in initialization after compute_rigid_rest_cm
-        for r_obj_id in self.ps.rigid_x:
+        for r_obj_id in range(self.ps.num_objects):
             # velocities and angular velocities have already been initialized in particle system
-            self.ps.rigid_x[r_obj_id] = self.ps.rigid_rest_cm[r_obj_id]
-            self.ps.rigid_quaternion[r_obj_id] = ti.Vector([1.0, 0.0, 0.0, 0.0])
-            self.ps.rigid_force[r_obj_id].fill(0.0)
-            self.ps.rigid_torque[r_obj_id].fill(0.0)
+            self.ps.rigid_x[0, r_obj_id] = self.ps.rigid_rest_cm[r_obj_id]
+            self.ps.rigid_quaternion[0, r_obj_id] = ti.Vector([1.0, 0.0, 0.0, 0.0])
+            self.ps.rigid_force[0, r_obj_id].fill(0.0)
+            self.ps.rigid_torque[0, r_obj_id].fill(0.0)
 
     @ti.kernel
     def compute_rigid_mass_info(self, object_id: int):
         sum_m = 0.0
         sum_inertia = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]], dt=float)
-        for p_i in self.ps.x:
-            if self.ps.object_id[p_i] == object_id:
-                mass = self.ps.m_V0 * self.ps.density[p_i]
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.object_id[0, p_i] == object_id:
+                mass = self.ps.m_V0 * self.ps.density[0, p_i]
                 sum_m += mass
-                r = self.ps.x[p_i] - self.ps.rigid_x[object_id]
+                r = self.ps.x[0, p_i] - self.ps.rigid_x[0, object_id]
                 sum_inertia += mass * (r.dot(r) * ti.Matrix.identity(ti.f32, 3) - r.outer_product(r))
         self.ps.rigid_mass[object_id] = sum_m
         self.ps.rigid_inertia0[object_id] = sum_inertia
-        self.ps.rigid_inertia[object_id] = sum_inertia
+        self.ps.rigid_inertia[0, object_id] = sum_inertia
         self.ps.rigid_inv_mass[object_id] = 1.0 / sum_m
-        self.ps.rigid_inv_inertia[object_id] = sum_inertia.inverse()
+        self.ps.rigid_inv_inertia[0, object_id] = sum_inertia.inverse()
 
     @ti.kernel
     def compute_rigid_rest_cm(self, object_id: int):
@@ -154,27 +164,27 @@ class SPHBase:
 
     @ti.kernel
     def compute_static_boundary_volume(self):
-        for p_i in ti.grouped(self.ps.x):
-            if not self.ps.is_static_rigid_body(p_i):
+        for p_i in range(self.ps.particle_num[None]):
+            if not self.ps.is_static_rigid_body(p_i, self.step_num[None]):
                 continue
             delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
-            self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            self.ps.for_all_neighbors(self.step_num[None], p_i, self.compute_boundary_volume_task, delta)
+            self.ps.m_V[self.step_num[None], p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     @ti.func
     def compute_boundary_volume_task(self, p_i, p_j, delta: ti.template()):
-        if self.ps.material[p_j] == self.ps.material_solid:
-            delta += self.cubic_kernel((self.ps.x[p_i] - self.ps.x[p_j]).norm())
+        if self.ps.material[self.step_num[None], p_j] == self.ps.material_solid:
+            delta += self.cubic_kernel((self.ps.x[self.step_num[None], p_i] - self.ps.x[self.step_num[None], p_j]).norm())
 
 
     @ti.kernel
     def compute_moving_boundary_volume(self):
-        for p_i in ti.grouped(self.ps.x):
-            if not self.ps.is_dynamic_rigid_body(p_i):
+        for p_i in range(self.ps.particle_num[None]):
+            if not self.ps.is_dynamic_rigid_body(p_i, self.step_num[None]):
                 continue
             delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(p_i, self.compute_boundary_volume_task, delta)
-            self.ps.m_V[p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            self.ps.for_all_neighbors(self.step_num[None], p_i, self.compute_boundary_volume_task, delta)
+            self.ps.m_V[self.step_num[None], p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     def substep(self):
         pass
@@ -183,28 +193,28 @@ class SPHBase:
     def simulate_collisions(self, p_i, vec):
         # Collision factor, assume roughly (1-c_f)*velocity loss after collision
         c_f = 0.5
-        self.ps.v[p_i] -= (
-            1.0 + c_f) * self.ps.v[p_i].dot(vec) * vec
+        self.ps.v[self.step_num[None], self.iter_num[None], p_i] -= (
+            1.0 + c_f) * self.ps.v[self.step_num[None], self.iter_num[None], p_i].dot(vec) * vec
 
     @ti.kernel
     def enforce_boundary_2D(self, particle_type:int):
-        for p_i in ti.grouped(self.ps.x):
-            if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]: 
-                pos = self.ps.x[p_i]
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[self.step_num[None], p_i] == particle_type and self.ps.is_dynamic[self.step_num[None], p_i]: 
+                pos = self.ps.x[self.step_num[None], p_i]
                 collision_normal = ti.Vector([0.0, 0.0])
                 if pos[0] > self.ps.domain_size[0] - self.ps.padding:
                     collision_normal[0] += 1.0
-                    self.ps.x[p_i][0] = self.ps.domain_size[0] - self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][0] = self.ps.domain_size[0] - self.ps.padding
                 if pos[0] <= self.ps.padding:
                     collision_normal[0] += -1.0
-                    self.ps.x[p_i][0] = self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][0] = self.ps.padding
 
                 if pos[1] > self.ps.domain_size[1] - self.ps.padding:
                     collision_normal[1] += 1.0
-                    self.ps.x[p_i][1] = self.ps.domain_size[1] - self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][1] = self.ps.domain_size[1] - self.ps.padding
                 if pos[1] <= self.ps.padding:
                     collision_normal[1] += -1.0
-                    self.ps.x[p_i][1] = self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][1] = self.ps.padding
                 collision_normal_length = collision_normal.norm()
                 if collision_normal_length > 1e-6:
                     self.simulate_collisions(
@@ -212,30 +222,30 @@ class SPHBase:
 
     @ti.kernel
     def enforce_boundary_3D(self, particle_type:int):
-        for p_i in ti.grouped(self.ps.x):
-            if self.ps.material[p_i] == particle_type and self.ps.is_dynamic[p_i]:
-                pos = self.ps.x[p_i]
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.material[self.step_num[None], p_i] == particle_type and self.ps.is_dynamic[self.step_num[None], p_i]:
+                pos = self.ps.x[self.step_num[None], p_i]
                 collision_normal = ti.Vector([0.0, 0.0, 0.0])
                 if pos[0] > self.ps.domain_size[0] - self.ps.padding:
                     collision_normal[0] += 1.0
-                    self.ps.x[p_i][0] = self.ps.domain_size[0] - self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][0] = self.ps.domain_size[0] - self.ps.padding
                 if pos[0] <= self.ps.padding:
                     collision_normal[0] += -1.0
-                    self.ps.x[p_i][0] = self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][0] = self.ps.padding
 
                 if pos[1] > self.ps.domain_size[1] - self.ps.padding:
                     collision_normal[1] += 1.0
-                    self.ps.x[p_i][1] = self.ps.domain_size[1] - self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][1] = self.ps.domain_size[1] - self.ps.padding
                 if pos[1] <= self.ps.padding:
                     collision_normal[1] += -1.0
-                    self.ps.x[p_i][1] = self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][1] = self.ps.padding
 
                 if pos[2] > self.ps.domain_size[2] - self.ps.padding:
                     collision_normal[2] += 1.0
-                    self.ps.x[p_i][2] = self.ps.domain_size[2] - self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][2] = self.ps.domain_size[2] - self.ps.padding
                 if pos[2] <= self.ps.padding:
                     collision_normal[2] += -1.0
-                    self.ps.x[p_i][2] = self.ps.padding
+                    self.ps.x[self.step_num[None], p_i][2] = self.ps.padding
 
                 collision_normal_length = collision_normal.norm()
                 if collision_normal_length > 1e-6:
@@ -248,9 +258,9 @@ class SPHBase:
         sum_m = 0.0
         cm = ti.Vector([0.0, 0.0, 0.0])
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.object_id[p_i] == object_id:
-                mass = self.ps.m_V0 * self.ps.density[p_i]
-                cm += mass * self.ps.x[p_i]
+            if self.ps.object_id[0, p_i] == object_id:
+                mass = self.ps.m_V0 * self.ps.density[0, p_i]
+                cm += mass * self.ps.x[0, p_i]
                 sum_m += mass
         cm /= sum_m
         return cm
@@ -259,31 +269,6 @@ class SPHBase:
     @ti.kernel
     def compute_com_kernel(self, object_id: int)->ti.types.vector(3, float):
         return self.compute_com(object_id)
-
-
-    @ti.kernel
-    def solve_constraints(self, object_id: int) -> ti.types.matrix(3, 3, float):
-        # compute center of mass
-        cm = self.compute_com(object_id)
-        # A
-        A = ti.Matrix([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
-        for p_i in range(self.ps.particle_num[None]):
-            if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
-                q = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id]
-                p = self.ps.x[p_i] - cm
-                A += self.ps.m_V0 * self.ps.density[p_i] * p.outer_product(q)
-
-        R, S = ti.polar_decompose(A)
-        
-        if all(abs(R) < 1e-6):
-            R = ti.Matrix.identity(ti.f32, 3)
-        
-        for p_i in range(self.ps.particle_num[None]):
-            if self.ps.is_dynamic_rigid_body(p_i) and self.ps.object_id[p_i] == object_id:
-                goal = cm + R @ (self.ps.x_0[p_i] - self.ps.rigid_rest_cm[object_id])
-                corr = (goal - self.ps.x[p_i]) * 1.0
-                self.ps.x[p_i] += corr
-        return R
         
 
     # @ti.kernel
@@ -327,32 +312,37 @@ class SPHBase:
 
     @ti.kernel
     def solve_rigid_body(self):
-        for r_obj_id in self.ps.rigid_x:
-            self.ps.rigid_force[r_obj_id] += self.ps.rigid_mass[r_obj_id] * ti.Vector(self.g)
+        for r_obj_id in range(self.ps.num_objects):
+            if self.ps.is_rigid[r_obj_id] == 1:
+                self.ps.rigid_force[self.step_num[None], r_obj_id] += self.ps.rigid_mass[r_obj_id] * ti.Vector(self.g)
 
-            self.ps.rigid_v[r_obj_id] += self.dt[None] * self.ps.rigid_force[r_obj_id] / self.ps.rigid_mass[r_obj_id]
-            self.ps.rigid_force[r_obj_id].fill(0.0)
-            self.ps.rigid_x[r_obj_id] += self.dt[None] * self.ps.rigid_v[r_obj_id]
-            self.ps.rigid_omega[r_obj_id] += self.dt[None] * self.ps.rigid_inv_inertia[r_obj_id] @ self.ps.rigid_torque[r_obj_id]
-            self.ps.rigid_torque[r_obj_id].fill(0.0)
-            self.ps.rigid_quaternion[r_obj_id] += self.dt[None] * 0.5 * quaternion_multiply(vec32quaternion(self.ps.rigid_omega[r_obj_id]), self.ps.rigid_quaternion[r_obj_id])
-            self.ps.rigid_quaternion[r_obj_id] /= self.ps.rigid_quaternion[r_obj_id].norm()
-            R = quaternion2rotation_matrix(self.ps.rigid_quaternion[r_obj_id])
-            self.ps.rigid_inertia[r_obj_id] = R @ self.ps.rigid_inertia0[r_obj_id] @ R.transpose()
-            self.ps.rigid_inv_inertia[r_obj_id] = self.ps.rigid_inertia[r_obj_id].inverse()
+                self.ps.rigid_v[self.step_num[None] + 1, r_obj_id] = self.ps.rigid_v[self.step_num[None], r_obj_id] + self.dt[None] * self.ps.rigid_force[self.step_num[None], r_obj_id] / self.ps.rigid_mass[r_obj_id]
+                self.ps.rigid_force[self.step_num[None] + 1, r_obj_id].fill(0.0)
+                self.ps.rigid_x[self.step_num[None] + 1, r_obj_id] = self.ps.rigid_x[self.step_num[None], r_obj_id] + self.dt[None] * self.ps.rigid_v[self.step_num[None] + 1, r_obj_id]
+                self.ps.rigid_omega[self.step_num[None] + 1, r_obj_id] = self.ps.rigid_omega[self.step_num[None], r_obj_id] + self.dt[None] * self.ps.rigid_inv_inertia[self.step_num[None], r_obj_id] @ self.ps.rigid_torque[self.step_num[None], r_obj_id]
+                self.ps.rigid_torque[self.step_num[None], r_obj_id].fill(0.0)
+                self.ps.rigid_quaternion[self.step_num[None], r_obj_id] += self.dt[None] * 0.5 * quaternion_multiply(vec32quaternion(self.ps.rigid_omega[self.step_num[None], r_obj_id]), self.ps.rigid_quaternion[self.step_num[None], r_obj_id])
+                self.ps.rigid_quaternion[self.step_num[None] + 1, r_obj_id] = self.ps.rigid_quaternion[self.step_num[None], r_obj_id].normalized()
+                R = quaternion2rotation_matrix(self.ps.rigid_quaternion[self.step_num[None] + 1, r_obj_id])
+                self.ps.rigid_inertia[self.step_num[None] + 1, r_obj_id] = R @ self.ps.rigid_inertia0[r_obj_id] @ R.transpose()
+                self.ps.rigid_inv_inertia[self.step_num[None] + 1, r_obj_id] = self.ps.rigid_inertia[self.step_num[None] + 1, r_obj_id].inverse()
             
     @ti.kernel
     def update_rigid_particle_info(self):
-        for p_i in self.ps.x:
-            if self.ps.is_dynamic_rigid_body(p_i):
-                r = self.ps.object_id[p_i]
-                x_rel = self.ps.x_0[p_i] - self.ps.rigid_rest_cm[r]
-                self.ps.x[p_i] = self.ps.rigid_x[r] + quaternion2rotation_matrix(self.ps.rigid_quaternion[r]) @ x_rel
-                self.ps.v[p_i] = self.ps.rigid_v[r] + self.ps.rigid_omega[r].cross(x_rel)
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.is_dynamic_rigid_body(p_i, self.step_num[None]):
+                r = self.ps.object_id[self.step_num[None], p_i]
+                x_rel = self.ps.x_0[self.step_num[None], p_i] - self.ps.rigid_rest_cm[r]
+                self.ps.x[self.step_num[None], p_i] = self.ps.rigid_x[self.step_num[None] + 1, r] + quaternion2rotation_matrix(self.ps.rigid_quaternion[self.step_num[None] + 1, r]) @ x_rel
+                self.ps.v[self.step_num[None], 0, p_i] = self.ps.rigid_v[self.step_num[None] + 1, r] + self.ps.rigid_omega[self.step_num[None] + 1, r].cross(x_rel)
 
 
-    def step(self):
-        self.ps.initialize_particle_system()
+    def step(self, step):
+        print(f"------------step {step}------------")
+        last_iter = self.iter_num[None]
+        self.step_num[None] = step
+        self.iter_num[None] = 0
+        self.ps.initialize_particle_system(step, last_iter)
         self.compute_moving_boundary_volume()
         self.substep()
         self.solve_rigid_body()
@@ -361,3 +351,7 @@ class SPHBase:
             self.enforce_boundary_2D(self.ps.material_fluid)
         elif self.ps.dim == 3:
             self.enforce_boundary_3D(self.ps.material_fluid)
+    
+
+    def end(self):
+        return self.step_num[None] >= self.ps.steps - 1

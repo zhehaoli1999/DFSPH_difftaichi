@@ -88,11 +88,15 @@ if __name__ == "__main__":
 
     cnt = 0
     cnt_ply = 0
+    cnt_frame = 0
 
     while window.running:
         for i in range(substeps):
-            solver.step()
-        ps.copy_to_vis_buffer(invisible_objects=invisible_objects)
+            if solver.end():
+                exit()
+            solver.step(cnt_frame)
+            cnt_frame += 1
+        ps.copy_to_vis_buffer(step=cnt_frame - 1, invisible_objects=invisible_objects)
         if ps.dim == 2:
             canvas.set_background_color(background_color)
             canvas.circles(ps.x_vis_buffer, radius=ps.particle_radius, color=particle_color)
