@@ -14,7 +14,9 @@
 		"boundaryHandlingMethod": 0,
 		"exportFrame": false,
 		"exportPly": false,
-		"exportObj": false
+		"exportObj": false,
+		"stepNum": 100,
+		"maxIterNum": 20
 	},
 	"RigidBodies": [
 		{
@@ -25,7 +27,7 @@
 			"rotationAngle": 180,
 			"scale": [0.25, 0.25, 0.25],
 			"velocity": [0.0, -5.0, 0.0],
-			"density": 7874.0,
+			"density": 300.0,
 			"color": [255, 255, 255], 
 			"isDynamic": true
 		}

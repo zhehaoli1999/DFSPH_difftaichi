@@ -13,7 +13,6 @@ class DFSPHSolver(SPHBase):
 
         self.m_max_iterations_v = self.ps.max_iter // 2
         self.m_max_iterations = self.ps.max_iter // 2
-        print(self.m_max_iterations, self.m_max_iterations_v)
 
         self.m_eps = 1e-5
 

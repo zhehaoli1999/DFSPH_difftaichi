@@ -122,41 +122,66 @@ class SPHBase:
                 r)
         return res
 
-    def initialize(self):
-        self.ps.initialize_particle_system(0, 0)
-        for r_obj_id in self.ps.object_id_rigid_body:
-            self.compute_rigid_rest_cm(r_obj_id)
+    def initialize_from_restart(self):
         self.initialize_rigid_info()
+        self.initialize_rigid_particle_info()
+
+    def initialize(self):
         for r_obj_id in self.ps.object_id_rigid_body:
             self.compute_rigid_mass_info(r_obj_id)
-        self.compute_static_boundary_volume()
-        self.compute_moving_boundary_volume()
+        self.initialize_fluid_particle_info()
+        self.initialize_from_restart()
+
 
     @ti.kernel
     def initialize_rigid_info(self):
-        # call in initialization after compute_rigid_rest_cm
         for r_obj_id in range(self.ps.num_objects):
-            # velocities and angular velocities have already been initialized in particle system
-            self.ps.rigid_x[0, r_obj_id] = self.ps.rigid_rest_cm[r_obj_id]
-            self.ps.rigid_quaternion[0, r_obj_id] = ti.Vector([1.0, 0.0, 0.0, 0.0])
-            self.ps.rigid_force[0, r_obj_id].fill(0.0)
-            self.ps.rigid_torque[0, r_obj_id].fill(0.0)
+            if self.ps.is_rigid[r_obj_id] == 1:
+
+                self.ps.rigid_x[0, r_obj_id] = self.ps.rigid_rest_cm[r_obj_id] + self.ps.rigid_adjust_x[r_obj_id]
+                self.ps.rigid_quaternion[0, r_obj_id] = self.ps.rigid_adjust_quaternion[r_obj_id]
+                self.ps.rigid_v[0, r_obj_id] = self.ps.rigid_v0[r_obj_id] + self.ps.rigid_adjust_v[r_obj_id]
+                self.ps.rigid_omega[0, r_obj_id] = self.ps.rigid_omega0[r_obj_id] + self.ps.rigid_adjust_omega[r_obj_id]
+                
+                self.ps.rigid_force[0, r_obj_id].fill(0.0)
+                self.ps.rigid_torque[0, r_obj_id].fill(0.0)
+                
+                R = quaternion2rotation_matrix(self.ps.rigid_quaternion[0, r_obj_id])
+                self.ps.rigid_inertia[0, r_obj_id] = R @ self.ps.rigid_inertia0[r_obj_id] @ R.transpose()
+                self.ps.rigid_inv_inertia[0, r_obj_id] = self.ps.rigid_inertia[0, r_obj_id].inverse()
+
+
+    @ti.kernel
+    def initialize_fluid_particle_info(self):
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.input_material[p_i] == self.ps.material_fluid:
+                self.ps.init_temp_x[p_i] = self.ps.input_x[p_i]
+                self.ps.init_temp_v[p_i] = self.ps.input_v[p_i]
+
+
+    @ti.kernel
+    def initialize_rigid_particle_info(self):
+        for p_i in range(self.ps.particle_num[None]):
+            if self.ps.input_material[p_i] == self.ps.material_solid:
+                r = self.ps.input_object_id[p_i]
+                x_rel = self.ps.input_x[p_i] - self.ps.rigid_rest_cm[r]
+                self.ps.init_temp_x[p_i] = self.ps.rigid_x[0, r] + quaternion2rotation_matrix(self.ps.rigid_quaternion[0, r]) @ x_rel
+                self.ps.init_temp_v[p_i] = self.ps.rigid_v[0, r] + self.ps.rigid_omega[0, r].cross(x_rel)
+
 
     @ti.kernel
     def compute_rigid_mass_info(self, object_id: int):
         sum_m = 0.0
         sum_inertia = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]], dt=float)
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.object_id[0, p_i] == object_id:
-                mass = self.ps.m_V0 * self.ps.density[0, p_i]
+            if self.ps.input_object_id[p_i] == object_id:
+                mass = self.ps.input_m[p_i]
                 sum_m += mass
-                r = self.ps.x[0, p_i] - self.ps.rigid_x[0, object_id]
+                r = self.ps.input_x[p_i] - self.ps.rigid_rest_cm[object_id]
                 sum_inertia += mass * (r.dot(r) * ti.Matrix.identity(ti.f32, 3) - r.outer_product(r))
         self.ps.rigid_mass[object_id] = sum_m
         self.ps.rigid_inertia0[object_id] = sum_inertia
-        self.ps.rigid_inertia[0, object_id] = sum_inertia
         self.ps.rigid_inv_mass[object_id] = 1.0 / sum_m
-        self.ps.rigid_inv_inertia[0, object_id] = sum_inertia.inverse()
 
     @ti.kernel
     def compute_rigid_rest_cm(self, object_id: int):
@@ -258,9 +283,9 @@ class SPHBase:
         sum_m = 0.0
         cm = ti.Vector([0.0, 0.0, 0.0])
         for p_i in range(self.ps.particle_num[None]):
-            if self.ps.object_id[0, p_i] == object_id:
-                mass = self.ps.m_V0 * self.ps.density[0, p_i]
-                cm += mass * self.ps.x[0, p_i]
+            if self.ps.input_object_id[p_i] == object_id:
+                mass = self.ps.input_m[p_i]
+                cm += mass * self.ps.input_x[p_i]
                 sum_m += mass
         cm /= sum_m
         return cm
@@ -334,7 +359,7 @@ class SPHBase:
                 r = self.ps.object_id[self.step_num[None], p_i]
                 x_rel = self.ps.x_0[self.step_num[None], p_i] - self.ps.rigid_rest_cm[r]
                 self.ps.x[self.step_num[None], p_i] = self.ps.rigid_x[self.step_num[None] + 1, r] + quaternion2rotation_matrix(self.ps.rigid_quaternion[self.step_num[None] + 1, r]) @ x_rel
-                self.ps.v[self.step_num[None], 0, p_i] = self.ps.rigid_v[self.step_num[None] + 1, r] + self.ps.rigid_omega[self.step_num[None] + 1, r].cross(x_rel)
+                self.ps.v[self.step_num[None], self.iter_num[None], p_i] = self.ps.rigid_v[self.step_num[None] + 1, r] + self.ps.rigid_omega[self.step_num[None] + 1, r].cross(x_rel)
 
 
     def step(self, step):
@@ -343,6 +368,8 @@ class SPHBase:
         self.step_num[None] = step
         self.iter_num[None] = 0
         self.ps.initialize_particle_system(step, last_iter)
+        if step == 0:
+            self.compute_static_boundary_volume()
         self.compute_moving_boundary_volume()
         self.substep()
         self.solve_rigid_body()
@@ -354,4 +381,12 @@ class SPHBase:
     
 
     def end(self):
-        return self.step_num[None] >= self.ps.steps - 1
+        return self.step_num[None] >= self.ps.steps - 2
+    
+    
+    @ti.kernel
+    def update(self):
+        for r_obj_id in range(self.ps.num_objects):
+            if self.ps.is_rigid[r_obj_id] == 1:
+                self.ps.rigid_adjust_x[r_obj_id] += ti.Vector([0., 0., 0.])
+                self.ps.rigid_adjust_omega[r_obj_id] += ti.Vector([0., 0., 10.])

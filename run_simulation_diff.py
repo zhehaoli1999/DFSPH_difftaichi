@@ -93,7 +93,9 @@ if __name__ == "__main__":
     while window.running:
         for i in range(substeps):
             if solver.end():
-                exit()
+                solver.update()
+                solver.initialize_from_restart()
+                cnt_frame = 0
             solver.step(cnt_frame)
             cnt_frame += 1
         ps.copy_to_vis_buffer(step=cnt_frame - 1, invisible_objects=invisible_objects)
