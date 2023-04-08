@@ -144,6 +144,7 @@ class ParticleSystem:
         # Particle related properties
         self.object_id = ti.field(dtype=int)
         self.x = ti.Vector.field(self.dim, dtype=float)
+        self.x_buffer = ti.Vector.field(self.dim, dtype=float)
         self.x_0 = ti.Vector.field(self.dim, dtype=float)
         self.v = ti.Vector.field(self.dim, dtype=float)
         self.acceleration = ti.Vector.field(self.dim, dtype=float)
@@ -155,7 +156,7 @@ class ParticleSystem:
         self.is_dynamic = ti.field(dtype=int)
 
         ti.root.dense(ti.ijk, (self.steps, self.max_iter, self.particle_max_num)).place(self.v)
-        ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.object_id, self.x_0, self.acceleration, self.m_V, self.density, self.m, self.material, self.color, self.is_dynamic, self.x)
+        ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.object_id, self.x_0, self.acceleration, self.m_V, self.density, self.m, self.material, self.color, self.is_dynamic, self.x, self.x_buffer)
 
         
         # used as "step -1" to satisfy resort operations
@@ -348,7 +349,7 @@ class ParticleSystem:
         for I in range(self.particle_num[None]):
             grid_index = 0
             if step != 0:
-                grid_index = self.get_flatten_grid_index(self.x[step - 1, I])
+                grid_index = self.get_flatten_grid_index(self.x_buffer[step - 1, I])
             else:
                 grid_index = self.get_flatten_grid_index(self.init_temp_x[I])
             if grid_index < 0:
@@ -397,7 +398,7 @@ class ParticleSystem:
                 self.grid_ids[step, new_index] = self.grid_ids[step - 1, I]
                 self.object_id[step, new_index] = self.object_id[step - 1, I]
                 self.x_0[step, new_index] = self.x_0[step - 1, I]
-                self.x[step, new_index] = self.x[step - 1, I]
+                self.x[step, new_index] = self.x_buffer[step - 1, I]
                 self.v[step, 0, new_index] = self.v[step - 1, last_iter, I]
                 self.m_V[step, new_index] = self.m_V[step - 1, I]
                 self.m[step, new_index] = self.m[step - 1, I]
@@ -418,7 +419,7 @@ class ParticleSystem:
     
 
     @ti.func
-    def for_all_neighbors(self, step, p_i, task: ti.template(), ret: ti.template()):
+    def for_all_neighbors(self, step, iter, p_i, task: ti.template(), ret: ti.template()):
         center_cell = self.pos_to_index(self.x[step, p_i])
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
@@ -426,7 +427,7 @@ class ParticleSystem:
                 continue
             for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
                 if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
-                    task(p_i, p_j, ret)
+                    task(step, iter, p_i, p_j, ret)
 
     @ti.kernel
     def copy_to_numpy(self, np_arr: ti.types.ndarray(), src_arr: ti.template()):
