@@ -430,11 +430,11 @@ class DFSPHSolver(SPHBase):
     def substep_grad(self):
         self.current_iter = self.iter_num[self.step_num]
         self.advect.grad(self.step_num, self.current_iter)
-        self.pressure_solve.grad()
+        self.pressure_solve_grad()
         self.current_iter -= 1
         self.predict_velocity.grad(self.step_num, self.current_iter)
         self.compute_non_pressure_forces.grad(self.step_num, self.current_iter)
         if self.enable_divergence_solver:
-            self.divergence_solve.grad()
+            self.divergence_solve_grad()
         self.compute_DFSPH_factor.grad(self.step_num, self.current_iter)
         self.compute_densities.grad(self.step_num, self.current_iter)

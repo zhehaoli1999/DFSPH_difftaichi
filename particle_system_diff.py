@@ -99,30 +99,33 @@ class ParticleSystem:
         if self.num_rigid_bodies > 0:
             # TODO: Here we actually only need to store rigid boides, however the object id of rigid may not start from 0, so allocate center of mass for all objects
             self.rigid_rest_cm = ti.Vector.field(self.dim, dtype=float)
-            self.rigid_x = ti.Vector.field(self.dim, dtype=float)
+            self.rigid_x = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
             self.rigid_v0 = ti.Vector.field(self.dim, dtype=float)
-            self.rigid_v = ti.Vector.field(self.dim, dtype=float)
-            self.rigid_quaternion = ti.Vector.field(4, dtype=float)
-            self.rigid_omega = ti.Vector.field(3, dtype=float)
+            self.rigid_v = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+            self.rigid_quaternion = ti.Vector.field(4, dtype=float, needs_grad=True)
+            self.rigid_omega = ti.Vector.field(3, dtype=float, needs_grad=True)
             self.rigid_omega0 = ti.Vector.field(3, dtype=float)
-            self.rigid_force = ti.Vector.field(self.dim, dtype=float)
-            self.rigid_torque = ti.Vector.field(self.dim, dtype=float)
+            self.rigid_force = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+            self.rigid_torque = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
             self.rigid_mass = ti.field(dtype=float)
-            self.rigid_inertia = ti.Matrix.field(m=3, n=3, dtype=float)
+            self.rigid_inertia = ti.Matrix.field(m=3, n=3, dtype=float, needs_grad=True)
             self.rigid_inertia0 = ti.Matrix.field(m=3, n=3, dtype=float)
             self.rigid_inv_mass = ti.field(dtype=float)
-            self.rigid_inv_inertia = ti.Matrix.field(m=3, n=3, dtype=float)
+            self.rigid_inv_inertia = ti.Matrix.field(m=3, n=3, dtype=float, needs_grad=True)
             self.is_rigid = ti.field(dtype=int)
             ti.root.dense(ti.ij, (self.steps, self.num_objects)).place(self.rigid_x, self.rigid_v, self.rigid_quaternion, self.rigid_omega, self.rigid_force, self.rigid_torque,
                                                                                        self.rigid_inertia, self.rigid_inv_inertia)
+            ti.root.dense(ti.ij, (self.steps, self.num_objects)).place(self.rigid_x.grad, self.rigid_v.grad, self.rigid_quaternion.grad, self.rigid_omega.grad,
+                                                                        self.rigid_force.grad, self.rigid_torque.grad, self.rigid_inertia.grad, self.rigid_inv_inertia.grad)
             ti.root.dense(ti.i, (self.num_objects)).place(self.rigid_rest_cm, self.rigid_v0, self.rigid_omega0, self.rigid_mass, self.rigid_inertia0, self.rigid_inv_mass, self.is_rigid)
 
-            self.rigid_adjust_x = ti.Vector.field(self.dim, dtype=float)
-            self.rigid_adjust_v = ti.Vector.field(self.dim, dtype=float)
-            self.rigid_adjust_omega = ti.Vector.field(3, dtype=float)
-            self.rigid_adjust_quaternion = ti.Vector.field(4, dtype=float)
+            self.rigid_adjust_x = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+            self.rigid_adjust_v = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+            self.rigid_adjust_omega = ti.Vector.field(3, dtype=float, needs_grad=True)
+            self.rigid_adjust_quaternion = ti.Vector.field(4, dtype=float, needs_grad=True)
 
             ti.root.dense(ti.i, (self.num_objects)).place(self.rigid_adjust_x, self.rigid_adjust_v, self.rigid_adjust_omega, self.rigid_adjust_quaternion)
+            ti.root.dense(ti.i, (self.num_objects)).place(self.rigid_adjust_x.grad, self.rigid_adjust_v.grad, self.rigid_adjust_omega.grad, self.rigid_adjust_quaternion.grad)
 
             for I in range(self.num_objects):
                 self.rigid_adjust_quaternion[I] = ti.Vector([1., 0., 0., 0.])
@@ -143,26 +146,28 @@ class ParticleSystem:
 
         # Particle related properties
         self.object_id = ti.field(dtype=int)
-        self.x = ti.Vector.field(self.dim, dtype=float)
-        self.x_buffer = ti.Vector.field(self.dim, dtype=float)
-        self.x_0 = ti.Vector.field(self.dim, dtype=float)
-        self.v = ti.Vector.field(self.dim, dtype=float)
-        self.acceleration = ti.Vector.field(self.dim, dtype=float)
-        self.m_V = ti.field(dtype=float)
+        self.x = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        self.x_buffer = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        self.x_0 = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        self.v = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        self.acceleration = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        self.m_V = ti.field(dtype=float, needs_grad=True)
         self.m = ti.field(dtype=float)
-        self.density = ti.field(dtype=float)
+        self.density = ti.field(dtype=float, needs_grad=True)
         self.material = ti.field(dtype=int)
         self.color = ti.Vector.field(3, dtype=int)
         self.is_dynamic = ti.field(dtype=int)
 
-        ti.root.dense(ti.ijk, (self.steps, self.max_iter, self.particle_max_num)).place(self.v)
-        ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.object_id, self.x_0, self.acceleration, self.m_V, self.density, self.m, self.material, self.color, self.is_dynamic, self.x, self.x_buffer)
+        ti.root.dense(ti.ijk, (self.steps, self.max_iter, self.particle_max_num)).place(self.v, self.v.grad)
+        ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.object_id, self.x, self.x_buffer, self.x_0, self.acceleration, self.m_V, self.density, self.m, self.material, self.color, self.is_dynamic)
+        ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.x.grad, self.x_buffer.grad, self.x_0.grad, self.acceleration.grad,
+                                                                        self.m_V.grad, self.density.grad)
 
         
         # used as "step -1" to satisfy resort operations
-        self.init_temp_x = ti.Vector.field(self.dim, dtype=float)
-        self.init_temp_v = ti.Vector.field(self.dim, dtype=float)
-        ti.root.dense(ti.i, (self.particle_max_num)).place(self.init_temp_x, self.init_temp_v)
+        self.init_temp_x = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        self.init_temp_v = ti.Vector.field(self.dim, dtype=float, needs_grad=True)
+        ti.root.dense(ti.i, (self.particle_max_num)).place(self.init_temp_x, self.init_temp_v, self.init_temp_x.grad, self.init_temp_v.grad)
 
         
         self.input_object_id = ti.field(dtype=int)
@@ -179,10 +184,12 @@ class ParticleSystem:
         ti.root.dense(ti.i, (self.particle_max_num)).place(self.input_object_id, self.input_x, self.input_v, self.input_m, self.input_m_V, self.input_density, self.input_material, self.input_color, self.input_is_dynamic, self.input_grid_ids, self.input_grid_ids_new)
 
         if self.cfg.get_cfg("simulationMethod") == 4:
-            self.dfsph_factor = ti.field(dtype=float)
-            self.density_adv = ti.field(dtype=float)
-            ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.dfsph_factor)
-            ti.root.dense(ti.ijk, (self.steps, self.max_iter, self.particle_max_num)).place(self.density_adv)
+            self.dfsph_factor = ti.field(dtype=float, needs_grad=True)
+            self.density_adv = ti.field(dtype=float, needs_grad=True)
+            ti.root.dense(ti.ij, (self.steps, self.particle_max_num)).place(self.dfsph_factor, self.dfsph_factor.grad)
+            ti.root.dense(ti.ijk, (self.steps, self.max_iter, self.particle_max_num)).place(self.density_adv, self.density_adv.grad)
+
+        self.loss = ti.field(dtype=float, shape=(), needs_grad=True)
 
         # Grid id for each particle
         self.grid_ids = ti.field(int)

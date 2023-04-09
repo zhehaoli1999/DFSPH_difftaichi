@@ -123,9 +123,15 @@ class SPHBase:
                 r)
         return res
 
+    @ti.ad.grad_replaced
     def initialize_from_restart(self):
         self.initialize_rigid_info()
         self.initialize_rigid_particle_info()
+
+    @ti.ad.grad_for(initialize_from_restart)
+    def initialize_from_restart_grad(self):
+        self.initialize_rigid_particle_info.grad()
+        self.initialize_rigid_info.grad()
 
     def initialize(self):
         for r_obj_id in self.ps.object_id_rigid_body:
@@ -326,16 +332,16 @@ class SPHBase:
             self.enforce_boundary_3D(step, self.iter_num[step], self.ps.material_fluid)
     
 
-    def end(self):
-        return self.step_num >= self.ps.steps - 2
+    def end(self, step):
+        return step >= self.ps.steps - 1
     
     
     @ti.kernel
     def update(self):
         for r_obj_id in range(self.ps.num_objects):
             if self.ps.is_rigid[r_obj_id] == 1:
-                self.ps.rigid_adjust_x[r_obj_id] += ti.Vector([0., 0., 0.])
-                self.ps.rigid_adjust_omega[r_obj_id] += ti.Vector([0., 0., 1.])
+                print("v grad:", self.ps.rigid_adjust_v.grad[r_obj_id])
+                self.ps.rigid_adjust_v[r_obj_id] += self.ps.rigid_adjust_v.grad[r_obj_id]
 
     @ti.ad.grad_for(step)
     def step_grad(self, step):
@@ -346,9 +352,12 @@ class SPHBase:
         self.ps.initialize_particle_system(step, last_iter)
         self.update_rigid_particle_info.grad(step, last_iter)
         self.solve_rigid_body.grad(step)
-        self.substep.grad()
+        self.substep_grad()
         self.compute_moving_boundary_volume.grad(step, 0)
         if step == 0:
             self.compute_static_boundary_volume.grad(step, 0)
         self.ps.counting_sort.grad(step, last_iter)
-        
+    
+    @ti.kernel
+    def compute_loss(self, step: int):
+        self.ps.loss[None] = (self.ps.rigid_x[step, 1] - ti.Vector([1.0, 1.0, 1.0])).norm_sqr()

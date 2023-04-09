@@ -7,7 +7,7 @@ from particle_system_diff import ParticleSystem
 from DFSPH_diff import DFSPHSolver
 
 
-ti.init(arch=ti.gpu, device_memory_fraction=0.5)
+ti.init(arch=ti.gpu, device_memory_fraction=0.5, debug=True)
 
 def build_solver(ps: ParticleSystem):
     solver_type = ps.cfg.get_cfg("simulationMethod")
@@ -89,10 +89,25 @@ if __name__ == "__main__":
     cnt = 0
     cnt_ply = 0
     cnt_frame = 0
+    losses = []
 
     while window.running:
         for i in range(substeps):
-            if solver.end():
+            if solver.end(cnt_frame):
+                ti.ad.clear_all_gradients()
+                solver.compute_loss(solver.ps.steps - 1)
+                loss = solver.ps.loss[None]
+                solver.ps.loss.grad[None] = 1
+                losses.append(loss)
+                print("loss:", loss)
+                if len(losses) > 100:
+                    print(losses)
+                    exit()
+                solver.compute_loss.grad(solver.ps.steps - 1)
+                for i in range(cnt_frame):
+                    step_index = cnt_frame - 1 - i
+                    solver.step_grad(step_index)
+                solver.initialize_from_restart.grad()
                 solver.update()
                 solver.initialize_from_restart()
                 cnt_frame = 0
