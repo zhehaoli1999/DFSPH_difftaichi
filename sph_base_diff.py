@@ -197,11 +197,10 @@ class SPHBase:
     @ti.kernel
     def compute_static_boundary_volume(self, step: int, iter: int):
         for p_i in range(self.ps.particle_num[None]):
-            if not self.ps.is_static_rigid_body(p_i, step):
-                continue
-            delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(step, iter, p_i, self.compute_boundary_volume_task, delta)
-            self.ps.m_V[step, p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            if self.ps.is_static_rigid_body(p_i, step):
+                delta = self.cubic_kernel(0.0)
+                self.ps.for_all_neighbors(step, iter, p_i, self.compute_boundary_volume_task, delta)
+                self.ps.m_V[step, p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     @ti.func
     def compute_boundary_volume_task(self, step, iter, p_i, p_j, delta: ti.template()):
@@ -212,11 +211,10 @@ class SPHBase:
     @ti.kernel
     def compute_moving_boundary_volume(self, step: int, iter: int):
         for p_i in range(self.ps.particle_num[None]):
-            if not self.ps.is_dynamic_rigid_body(p_i, step):
-                continue
-            delta = self.cubic_kernel(0.0)
-            self.ps.for_all_neighbors(step, iter, p_i, self.compute_boundary_volume_task, delta)
-            self.ps.m_V[step, p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
+            if self.ps.is_dynamic_rigid_body(p_i, step):
+                delta = self.cubic_kernel(0.0)
+                self.ps.for_all_neighbors(step, iter, p_i, self.compute_boundary_volume_task, delta)
+                self.ps.m_V[step, p_i] = 1.0 / delta * 3.0  # TODO: the 3.0 here is a coefficient for missing particles by trail and error... need to figure out how to determine it sophisticatedly
 
     def substep(self):
         pass

@@ -430,11 +430,10 @@ class ParticleSystem:
         center_cell = self.pos_to_index(self.x[step, p_i])
         for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
             grid_index = self.flatten_grid_index(center_cell + offset)
-            if grid_index >= self.grid_number or grid_index < 0:
-                continue
-            for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
-                    task(step, iter, p_i, p_j, ret)
+            if grid_index < self.grid_number and grid_index >= 0:
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+                    if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
+                        task(step, iter, p_i, p_j, ret)
 
     @ti.kernel
     def copy_to_numpy(self, np_arr: ti.types.ndarray(), src_arr: ti.template()):
