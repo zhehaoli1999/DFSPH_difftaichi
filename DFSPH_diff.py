@@ -241,9 +241,11 @@ class DFSPHSolver(SPHBase):
             # use max density error divided by time step size
             eta = 1.0 / self.dt[None] * self.max_error_V * 0.01 * self.density_0
             # print("eta ", eta)
+            
+            # move it inside to make sure same counter behavior in different situations
+            m_iterations_v += 1
             if avg_density_err <= eta:
                 break
-            m_iterations_v += 1
         print(f"DFSPH - iteration V: {m_iterations_v} Avg density err: {avg_density_err}")
 
         # Multiply by h, the time step size has to be removed 
@@ -258,8 +260,10 @@ class DFSPHSolver(SPHBase):
     
     @ti.ad.grad_for(divergence_solve)
     def divergence_solve_grad(self):
-        # TODO
-        pass
+        for i in range(self.divergence_iter_num[self.step_num]):
+            self.current_iter -= 1
+            self.pressure_solve_iteration_kernel.grad(self.step_num, self.current_iter)
+            self.compute_density_adv.grad(self.current_iter)
 
 
     def divergence_solver_iteration(self):
@@ -327,9 +331,11 @@ class DFSPHSolver(SPHBase):
             avg_density_err = self.pressure_solve_iteration()
             # Max allowed density fluctuation
             eta = self.max_error * 0.01 * self.density_0
+            
+            # move it inside to make sure same counter behavior in different situations
+            m_iterations += 1
             if avg_density_err <= eta:
                 break
-            m_iterations += 1
         print(f"DFSPH - iterations: {m_iterations} Avg density Err: {avg_density_err:.4f}")
         # Multiply by h, the time step size has to be removed 
         # to make the stiffness value independent 
@@ -342,8 +348,11 @@ class DFSPHSolver(SPHBase):
 
     @ti.ad.grad_for(pressure_solve)
     def pressure_solve_grad(self):
-        # TODO
-        pass
+        for i in range(self.pressure_iter_num[self.step_num]):
+            self.current_iter -= 1
+            self.pressure_solve_iteration_kernel.grad(self.step_num, self.current_iter)
+            self.compute_density_adv.grad(self.current_iter)
+
     
     def pressure_solve_iteration(self):
         self.pressure_solve_iteration_kernel(self.step_num, self.iter_num[self.step_num])
@@ -402,7 +411,7 @@ class DFSPHSolver(SPHBase):
         # compute new velocities only considering non-pressure forces
         for p_i in range(self.ps.particle_num[None]):
             if self.ps.is_dynamic[step, p_i] and self.ps.material[step, p_i] == self.ps.material_fluid:
-                self.ps.v[step, iter, p_i] += self.dt[None] * self.ps.acceleration[step, p_i]
+                self.ps.v[step, iter + 1, p_i] = self.ps.v[step, iter, p_i] + self.dt[None] * self.ps.acceleration[step, p_i]
 
     @ti.ad.grad_replaced
     def substep(self):
@@ -412,14 +421,17 @@ class DFSPHSolver(SPHBase):
             self.divergence_solve()
         self.compute_non_pressure_forces(self.step_num, self.iter_num[self.step_num])
         self.predict_velocity(self.step_num, self.iter_num[self.step_num])
+        self.iter_num[self.step_num] += 1
         self.pressure_solve()
         self.advect(self.step_num, self.iter_num[self.step_num])
+        # print(self.iter_num[self.step_num], self.pressure_iter_num[self.step_num], self.divergence_iter_num[self.step_num])
 
     @ti.ad.grad_for(substep)
     def substep_grad(self):
-        self.current_iter = self.iter_num[self.step]
+        self.current_iter = self.iter_num[self.step_num]
         self.advect.grad(self.step_num, self.current_iter)
         self.pressure_solve.grad()
+        self.current_iter -= 1
         self.predict_velocity.grad(self.step_num, self.current_iter)
         self.compute_non_pressure_forces.grad(self.step_num, self.current_iter)
         if self.enable_divergence_solver:

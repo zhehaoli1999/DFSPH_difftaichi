@@ -342,6 +342,7 @@ class SPHBase:
         last_iter = 0
         if step != 0:
             last_iter = self.iter_num[step - 1]
+        self.step_num = step
         self.ps.initialize_particle_system(step, last_iter)
         self.update_rigid_particle_info.grad(step, last_iter)
         self.solve_rigid_body.grad(step)
