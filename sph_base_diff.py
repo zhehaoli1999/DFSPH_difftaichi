@@ -317,7 +317,8 @@ class SPHBase:
             last_iter = self.iter_num[step - 1]
         self.step_num = step
         self.iter_num[step] = 0
-        self.ps.initialize_particle_system(step, last_iter)
+        self.ps.initialize_particle_system(step)
+        self.ps.counting_sort(step, last_iter)
         if step == 0:
             self.compute_static_boundary_volume(step, 0)
         self.compute_moving_boundary_volume(step, 0)
@@ -335,11 +336,11 @@ class SPHBase:
     
     
     @ti.kernel
-    def update(self):
+    def update(self, lr: float):
         for r_obj_id in range(self.ps.num_objects):
             if self.ps.is_rigid[r_obj_id] == 1:
                 print("v grad:", self.ps.rigid_adjust_v.grad[r_obj_id])
-                self.ps.rigid_adjust_v[r_obj_id] += self.ps.rigid_adjust_v.grad[r_obj_id]
+                self.ps.rigid_adjust_v[r_obj_id] -= self.ps.rigid_adjust_v.grad[r_obj_id] * lr
 
     @ti.ad.grad_for(step)
     def step_grad(self, step):
@@ -347,14 +348,17 @@ class SPHBase:
         if step != 0:
             last_iter = self.iter_num[step - 1]
         self.step_num = step
-        self.ps.initialize_particle_system(step, last_iter)
+        self.ps.initialize_particle_system(step)
         self.update_rigid_particle_info.grad(step, last_iter)
         self.solve_rigid_body.grad(step)
         self.substep_grad()
         self.compute_moving_boundary_volume.grad(step, 0)
         if step == 0:
             self.compute_static_boundary_volume.grad(step, 0)
-        self.ps.counting_sort.grad(step, last_iter)
+        if step == 0:
+            self.ps.counting_sort_init.grad()
+        else:
+            self.ps.counting_sort_impl(step, last_iter)
     
     @ti.kernel
     def compute_loss(self, step: int):

@@ -90,6 +90,7 @@ if __name__ == "__main__":
     cnt_ply = 0
     cnt_frame = 0
     losses = []
+    lr = 10
 
     while window.running:
         for i in range(substeps):
@@ -107,8 +108,8 @@ if __name__ == "__main__":
                 for i in range(cnt_frame):
                     step_index = cnt_frame - 1 - i
                     solver.step_grad(step_index)
-                solver.initialize_from_restart.grad()
-                solver.update()
+                solver.initialize_from_restart_grad()
+                solver.update(lr)
                 solver.initialize_from_restart()
                 cnt_frame = 0
             solver.step(cnt_frame)

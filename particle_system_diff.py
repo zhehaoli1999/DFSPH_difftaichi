@@ -372,57 +372,69 @@ class ParticleSystem:
             self.grid_particles_num_temp[I] = self.grid_particles_num[I]
     
     @ti.kernel
+    def counting_sort_init(self):
+        for I in range(self.particle_max_num):
+            new_index = self.input_grid_ids_new[I]
+            self.grid_ids[0, new_index] = self.input_grid_ids[I]
+            self.object_id[0, new_index] = self.input_object_id[I]
+            self.x_0[0, new_index] = self.init_temp_x[I]
+            self.x[0, new_index] = self.init_temp_x[I]
+            self.v[0, 0, new_index] = self.init_temp_v[I]
+            self.m[0, new_index] = self.input_m[I]
+            self.m_V[0, new_index] = self.input_m_V[I]
+            self.density[0, new_index] = self.input_density[I]
+            self.material[0, new_index] = self.input_material[I]
+            self.color[0, new_index] = self.input_color[I]
+            self.is_dynamic[0, new_index] = self.input_is_dynamic[I]
+    
+    @ti.kernel
+    def counting_sort_impl(self, step: int, last_iter: int):
+        for I in range(self.particle_max_num):
+            new_index = self.grid_ids_new[step - 1, I]
+            self.grid_ids[step, new_index] = self.grid_ids[step - 1, I]
+            self.object_id[step, new_index] = self.object_id[step - 1, I]
+            self.x_0[step, new_index] = self.x_0[step - 1, I]
+            self.x[step, new_index] = self.x_buffer[step - 1, I]
+            self.v[step, 0, new_index] = self.v[step - 1, last_iter, I]
+            self.m_V[step, new_index] = self.m_V[step - 1, I]
+            self.m[step, new_index] = self.m[step - 1, I]
+            self.density[step, new_index] = self.density[step - 1, I]
+            self.material[step, new_index] = self.material[step - 1, I]
+            self.color[step, new_index] = self.color[step - 1, I]
+            self.is_dynamic[step, new_index] = self.is_dynamic[step - 1, I]
+
+    @ti.kernel
+    def counting_sort_prepare_init(self):
+        for i in range(self.particle_max_num):
+            I = self.particle_max_num - 1 - i
+            base_offset = 0
+            if self.input_grid_ids[I] - 1 >= 0:
+                base_offset = self.grid_particles_num[self.input_grid_ids[I]-1]
+            self.input_grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.input_grid_ids[I]], 1) - 1 + base_offset
+    
+    @ti.kernel
+    def counting_sort_prepare_impl(self, step: int):
+        for i in range(self.particle_max_num):
+            I = self.particle_max_num - 1 - i
+            base_offset = 0
+            if self.grid_ids[step - 1, I] - 1 >= 0:
+                base_offset = self.grid_particles_num[self.grid_ids[step - 1, I]-1]
+            self.grid_ids_new[step - 1, I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[step - 1, I]], 1) - 1 + base_offset
+    
     def counting_sort(self, step: int, last_iter: int):
         if step == 0:
-            for i in range(self.particle_max_num):
-                I = self.particle_max_num - 1 - i
-                base_offset = 0
-                if self.input_grid_ids[I] - 1 >= 0:
-                    base_offset = self.grid_particles_num[self.input_grid_ids[I]-1]
-                self.input_grid_ids_new[I] = ti.atomic_sub(self.grid_particles_num_temp[self.input_grid_ids[I]], 1) - 1 + base_offset
-            for I in range(self.particle_max_num):
-                new_index = self.input_grid_ids_new[I]
-                self.grid_ids[0, new_index] = self.input_grid_ids[I]
-                self.object_id[0, new_index] = self.input_object_id[I]
-                self.x_0[0, new_index] = self.init_temp_x[I]
-                self.x[0, new_index] = self.init_temp_x[I]
-                self.v[0, 0, new_index] = self.init_temp_v[I]
-                self.m[0, new_index] = self.input_m[I]
-                self.m_V[0, new_index] = self.input_m_V[I]
-                self.density[0, new_index] = self.input_density[I]
-                self.material[0, new_index] = self.input_material[I]
-                self.color[0, new_index] = self.input_color[I]
-                self.is_dynamic[0, new_index] = self.input_is_dynamic[I]
+            self.counting_sort_init()
         else:
-            for i in range(self.particle_max_num):
-                I = self.particle_max_num - 1 - i
-                base_offset = 0
-                if self.grid_ids[step - 1, I] - 1 >= 0:
-                    base_offset = self.grid_particles_num[self.grid_ids[step - 1, I]-1]
-                self.grid_ids_new[step - 1, I] = ti.atomic_sub(self.grid_particles_num_temp[self.grid_ids[step - 1, I]], 1) - 1 + base_offset
-            for I in range(self.particle_max_num):
-                new_index = self.grid_ids_new[step - 1, I]
-                self.grid_ids[step, new_index] = self.grid_ids[step - 1, I]
-                self.object_id[step, new_index] = self.object_id[step - 1, I]
-                self.x_0[step, new_index] = self.x_0[step - 1, I]
-                self.x[step, new_index] = self.x_buffer[step - 1, I]
-                self.v[step, 0, new_index] = self.v[step - 1, last_iter, I]
-                self.m_V[step, new_index] = self.m_V[step - 1, I]
-                self.m[step, new_index] = self.m[step - 1, I]
-                self.density[step, new_index] = self.density[step - 1, I]
-                self.material[step, new_index] = self.material[step - 1, I]
-                self.color[step, new_index] = self.color[step - 1, I]
-                self.is_dynamic[step, new_index] = self.is_dynamic[step - 1, I]
-
-                # if ti.static(self.simulation_method == 4):
-                #     self.dfsph_factor[step, new_index] = self.dfsph_factor[step - 1, I]
-                #     self.density_adv[step, new_index] = self.density_adv[step - 1, I]
+            self.counting_sort_impl(step, last_iter)
     
 
-    def initialize_particle_system(self, step, last_iter):
+    def initialize_particle_system(self, step):
         self.update_grid_id(step)
         self.prefix_sum_executor.run(self.grid_particles_num)
-        self.counting_sort(step, last_iter)
+        if step == 0:
+            self.counting_sort_prepare_init()
+        else:
+            self.counting_sort_prepare_impl(step)
     
 
     @ti.func
