@@ -439,13 +439,53 @@ class ParticleSystem:
 
     @ti.func
     def for_all_neighbors(self, step, iter, p_i, task: ti.template(), ret: ti.template()):
-        center_cell = self.pos_to_index(self.x[step, p_i])
-        for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
-            grid_index = self.flatten_grid_index(center_cell + offset)
-            if grid_index < self.grid_number and grid_index >= 0:
-                for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-                    if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
-                        task(step, iter, p_i, p_j, ret)
+        pass
+        # for p_j in range(self.particle_max_num):
+        #     if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
+        #         task(step, iter, p_i, p_j, ret) ## slow and error
+
+        # center_cell = self.pos_to_index(self.x[step, p_i])
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+        #     grid_index = self.flatten_grid_index(center_cell + offset)
+        #     if grid_index < self.grid_number and grid_index >= 0:
+        #         for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+        #             if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
+        #                 task(step, iter, p_i, p_j, ret) ## error
+
+        # center_cell = self.pos_to_index(self.x[step, p_i])
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+        #     grid_index = self.flatten_grid_index(center_cell + offset)
+        #     if grid_index < self.grid_number and grid_index >= 0:
+        #         pass ## ok
+
+        # center_cell = self.pos_to_index(self.x[step, p_i])
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+        #     grid_index = self.flatten_grid_index(center_cell + offset)
+        #     if grid_index < self.grid_number and grid_index >= 0:
+        #         for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+        #             pass ## error
+
+        # center_cell = self.pos_to_index(self.x[step, p_i])
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+        #     grid_index = self.flatten_grid_index(center_cell + offset)
+        #     if grid_index < self.grid_number and grid_index >= 0:
+        #         for p_j in range(0, 1):
+        #             if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
+        #                 task(step, iter, p_i, p_j, ret) ## error
+
+        # center_cell = self.pos_to_index(self.x[step, p_i])
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+        #     grid_index = self.flatten_grid_index(center_cell + offset)
+        #     if grid_index < self.grid_number and grid_index >= 0:
+        #         for p_j in range(0, 1):
+        #             pass ## ok
+
+        # center_cell = self.pos_to_index(self.x[step, p_i])
+        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+        #     grid_index = self.flatten_grid_index(center_cell + offset)
+        #     if grid_index < self.grid_number and grid_index >= 0:
+        #         for p_j in range(self.grid_particles_num[0], self.grid_particles_num[1]):
+        #             pass ## error
 
     @ti.kernel
     def copy_to_numpy(self, np_arr: ti.types.ndarray(), src_arr: ti.template()):
