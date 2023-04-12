@@ -6,8 +6,10 @@ from config_builder import SimConfig
 from particle_system_diff import ParticleSystem
 from DFSPH_diff import DFSPHSolver
 
+arch = ti.gpu
+assert arch is ti.gpu or arch is ti.cpu
 
-ti.init(arch=ti.gpu, device_memory_fraction=0.5, debug=True)
+ti.init(arch=arch, device_memory_fraction=0.5, debug=True)
 
 def build_solver(ps: ParticleSystem):
     solver_type = ps.cfg.get_cfg("simulationMethod")
@@ -42,7 +44,7 @@ if __name__ == "__main__":
         os.makedirs(f"{scene_name}_output", exist_ok=True)
 
 
-    ps = ParticleSystem(config, GGUI=True)
+    ps = ParticleSystem(config, GGUI=True, arch=arch)
 
     solver = build_solver(ps)
     solver.initialize()

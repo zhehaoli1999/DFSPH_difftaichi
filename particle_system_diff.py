@@ -5,9 +5,21 @@ from functools import reduce
 from config_builder import SimConfig
 from scan_single_buffer import parallel_prefix_sum_inclusive_inplace
 
+
+@ti.data_oriented
+class CPUPrefixSumExecutor:
+    def __init__(self, length) -> None:
+        self._length = length - 1
+    def run(self, input_arr):
+        if input_arr.dtype != ti.i32:
+            raise RuntimeError("Only ti.i32 type is supported for prefix sum.")
+        for i in range(self._length):
+            input_arr[i + 1] += input_arr[i]
+
+
 @ti.data_oriented
 class ParticleSystem:
-    def __init__(self, config: SimConfig, GGUI=False):
+    def __init__(self, config: SimConfig, arch=ti.gpu, GGUI=False):
         self.cfg = config
         self.GGUI = GGUI
 
@@ -142,7 +154,10 @@ class ParticleSystem:
         self.grid_particles_num = ti.field(int, shape=int(self.grid_number))
         self.grid_particles_num_temp = ti.field(int, shape=int(self.grid_number))
 
-        self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
+        if arch is ti.cpu:
+            self.prefix_sum_executor = CPUPrefixSumExecutor(self.grid_particles_num.shape[0])
+        elif arch == ti.gpu:
+            self.prefix_sum_executor = ti.algorithms.PrefixSumExecutor(self.grid_particles_num.shape[0])
 
         # Particle related properties
         self.object_id = ti.field(dtype=int)
@@ -444,13 +459,13 @@ class ParticleSystem:
         #     if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
         #         task(step, iter, p_i, p_j, ret) ## slow and error
 
-        # center_cell = self.pos_to_index(self.x[step, p_i])
-        # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
-        #     grid_index = self.flatten_grid_index(center_cell + offset)
-        #     if grid_index < self.grid_number and grid_index >= 0:
-        #         for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
-        #             if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
-        #                 task(step, iter, p_i, p_j, ret) ## error
+        center_cell = self.pos_to_index(self.x[step, p_i])
+        for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
+            grid_index = self.flatten_grid_index(center_cell + offset)
+            if grid_index < self.grid_number and grid_index >= 0:
+                for p_j in range(self.grid_particles_num[ti.max(0, grid_index-1)], self.grid_particles_num[grid_index]):
+                    if p_i != p_j and (self.x[step, p_i] - self.x[step, p_j]).norm() < self.support_radius:
+                        task(step, iter, p_i, p_j, ret) ## error
 
         # center_cell = self.pos_to_index(self.x[step, p_i])
         # for offset in ti.grouped(ti.ndrange(*((-1, 2),) * self.dim)):
