@@ -3,6 +3,9 @@ import taichi as ti
 import numpy as np
 from particle_system_diff_forward import ParticleSystem
 
+def none(*args):
+    pass
+print_debug = none
 
 @ti.func
 def quaternion_multiply(a: ti.types.vector(4, float), b: ti.types.vector(4, float)) -> ti.types.vector(4, float):
@@ -140,7 +143,7 @@ class SPHBase:
             if self.ps.is_rigid[r_obj_id] == 1:
 
                 self.ps.rigid_x[0, r_obj_id] = self.ps.rigid_rest_cm[r_obj_id]
-                self.ps.rigid_quaternion[0, r_obj_id].fill(0.0)
+                self.ps.rigid_quaternion[0, r_obj_id] = ti.Vector([1.0, 0.0, 0.0, 0.0])
                 if r_obj_id == 1:
                     for i in range(3):
                         self.ps.rigid_v[0, 1][i] = self.ps.rigid_v0[1][i] + self.ps.rigid_adjust_v[i]
@@ -320,7 +323,9 @@ class SPHBase:
         if step == 0:
             self.compute_static_boundary_volume(step, 0)
         self.compute_moving_boundary_volume(step, 0)
+        print_debug("substep")
         self.substep()
+        print_debug("rigid body")
         self.solve_rigid_body(step)
         self.update_rigid_particle_info(step, self.iter_num[step])
         if self.ps.dim == 2:

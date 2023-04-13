@@ -620,3 +620,23 @@ class ParticleSystem:
             print("I", self.rigid_inertia[step, r])
             print("f", self.rigid_force[step, r])
             print("t", self.rigid_torque[step, r])
+
+    def print_rigid_grad_info(self, steps, filename):
+        with open(filename, 'w') as file:
+            for step in range(steps):
+                file.write(f"step {step} status --------\n")
+                for r in self.object_id_rigid_body:
+                    file.write(f"object {r}\n")
+                    file.write(f"x {self.rigid_x[step, r]} grad {self.rigid_x.dual[step, r]}\n")
+                    file.write(f"x0 {self.rigid_rest_cm[r]}\n")
+                    file.write(f"v {self.rigid_v[step, r]} grad {self.rigid_v.dual[step, r]}\n")
+                    file.write(f"v0 {self.rigid_v0[r]}\n")
+                    file.write(f"w {self.rigid_omega[step, r]} grad {self.rigid_omega.dual[step, r]}\n")
+                    file.write(f"w0 {self.rigid_omega0[r]}\n")
+                    file.write(f"q {self.rigid_quaternion[step, r]} grad {self.rigid_quaternion.dual[step, r]}\n")
+
+                    file.write(f"m {self.rigid_mass[r]}\n")
+                    file.write(f"I {self.rigid_inertia[step, r]}\ngrad {self.rigid_inertia.dual[step, r]}\n")
+                    file.write(f"f {self.rigid_force[step, r]} grad {self.rigid_force.dual[step, r]}\n")
+                    file.write(f"t {self.rigid_torque[step, r]} grad {self.rigid_torque.dual[step, r]}\n")
+                file.write(f"step {step} finish --------\n")

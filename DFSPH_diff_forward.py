@@ -2,6 +2,9 @@ import taichi as ti
 from sph_base_diff_forward import SPHBase
 from particle_system_diff_forward import ParticleSystem
 
+def none(*args):
+    pass
+print_debug = none
 
 class DFSPHSolver(SPHBase):
     def __init__(self, particle_system: ParticleSystem):
@@ -254,9 +257,12 @@ class DFSPHSolver(SPHBase):
 
 
     def divergence_solver_iteration(self):
+        print_debug("kernel")
         self.divergence_solver_iteration_kernel(self.step_num, self.iter_num[self.step_num])
         self.iter_num[self.step_num] += 1
+        print_debug("density change")
         self.compute_density_change(self.step_num, self.iter_num[self.step_num])
+        print_debug("error")
         density_err = self.compute_density_error(self.step_num, self.iter_num[self.step_num], 0.0)
         return density_err / self.ps.fluid_particle_num
 
@@ -334,9 +340,12 @@ class DFSPHSolver(SPHBase):
 
     
     def pressure_solve_iteration(self):
+        print_debug("kernel")
         self.pressure_solve_iteration_kernel(self.step_num, self.iter_num[self.step_num])
         self.iter_num[self.step_num] += 1
+        print_debug("density adv")
         self.compute_density_adv(self.step_num, self.iter_num[self.step_num])
+        print_debug("error")
         density_err = self.compute_density_error(self.step_num, self.iter_num[self.step_num], self.density_0)
         return density_err / self.ps.fluid_particle_num
 
@@ -392,14 +401,21 @@ class DFSPHSolver(SPHBase):
                 self.ps.v[step, iter + 1, p_i] = self.ps.v[step, iter, p_i] + self.dt[None] * self.ps.acceleration[step, p_i]
 
     def substep(self):
+        print_debug("compute density")
         self.compute_densities(self.step_num, self.iter_num[self.step_num])
+        print_debug("compute factor")
         self.compute_DFSPH_factor(self.step_num, self.iter_num[self.step_num])
         if self.enable_divergence_solver:
+            print_debug("divergence solve")
             self.divergence_solve()
+        print_debug("non pressure force")
         self.compute_non_pressure_forces(self.step_num, self.iter_num[self.step_num])
+        print_debug("predict velocity")
         self.predict_velocity(self.step_num, self.iter_num[self.step_num])
         self.iter_num[self.step_num] += 1
+        print_debug("pressure solve")
         self.pressure_solve()
+        print_debug("advect")
         self.advect(self.step_num, self.iter_num[self.step_num])
 
 

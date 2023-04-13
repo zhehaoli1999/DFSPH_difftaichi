@@ -63,9 +63,12 @@ if __name__ == "__main__":
             print("finish")
             solver.compute_loss(ps.steps - 1)
 
+        ps.print_rigid_grad_info(cnt_frame, "rigid.log")
         current_loss = ps.loss[None]
         losses.append(current_loss)
         print("loss: ", current_loss)
         print("loss grad: ", ps.loss.dual[None])
         cnt_frame = 0
+
+        exit()
         # solver.update()
