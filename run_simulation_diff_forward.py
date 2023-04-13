@@ -9,7 +9,7 @@ from DFSPH_diff_forward import DFSPHSolver
 arch = ti.cpu
 assert arch is ti.gpu or arch is ti.cpu
 
-ti.init(arch=arch, device_memory_fraction=0.5, debug=True, cpu_max_num_threads=1)
+ti.init(arch=arch, device_memory_fraction=0.5)
 
 def build_solver(ps: ParticleSystem):
     solver_type = ps.cfg.get_cfg("simulationMethod")
