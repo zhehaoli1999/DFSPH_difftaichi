@@ -105,6 +105,10 @@ class ParticleSystem:
         self.steps = self.cfg.get_cfg("stepNum")
         self.max_iter = self.cfg.get_cfg("maxIterNum")
 
+        self.debug_mode = True
+        if self.debug_mode:
+            self.debug_file = open("debug.log", 'w')
+
         #========== Allocate memory ==========#
         # Rigid body properties
         if self.num_rigid_bodies > 0:
@@ -624,7 +628,7 @@ class ParticleSystem:
     def print_rigid_grad_info(self, steps, filename):
         with open(filename, 'w') as file:
             for step in range(steps):
-                file.write(f"step {step} status --------\n")
+                file.write(f"step {step} status ----------------------------------------\n")
                 for r in self.object_id_rigid_body:
                     file.write(f"object {r}\n")
                     file.write(f"x {self.rigid_x[step, r]} grad {self.rigid_x.dual[step, r]}\n")
@@ -639,4 +643,20 @@ class ParticleSystem:
                     file.write(f"I {self.rigid_inertia[step, r]}\ngrad {self.rigid_inertia.dual[step, r]}\n")
                     file.write(f"f {self.rigid_force[step, r]} grad {self.rigid_force.dual[step, r]}\n")
                     file.write(f"t {self.rigid_torque[step, r]} grad {self.rigid_torque.dual[step, r]}\n")
-                file.write(f"step {step} finish --------\n")
+                file.write(f"step {step} finish ----------------------------------------\n")
+    
+    def close(self):
+        if self.debug_mode:
+            self.debug_file.close()
+
+    def debug_print_rigid_force(self, step):
+        if not self.debug_mode:
+            return
+        for r in self.object_id_rigid_body:
+            self.debug_file.write(f"object {r} step {step}\n")
+            self.debug_file.write(f"force {self.rigid_force[step, r]} {self.rigid_force.dual[step, r]}\n")
+            self.debug_file.write(f"torque {self.rigid_torque[step, r]} {self.rigid_torque.dual[step, r]}\n")
+    
+    def debug_print(self, s: str):
+        if self.debug_mode:
+            self.debug_file.write(s)

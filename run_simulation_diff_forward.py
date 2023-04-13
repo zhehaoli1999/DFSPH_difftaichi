@@ -70,5 +70,6 @@ if __name__ == "__main__":
         print("loss grad: ", ps.loss.dual[None])
         cnt_frame = 0
 
+        ps.close()
         exit()
         # solver.update()

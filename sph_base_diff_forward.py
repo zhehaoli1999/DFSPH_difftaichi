@@ -69,6 +69,11 @@ class SPHBase:
         self.pressure_iter_num = ti.field(int, shape=(self.ps.steps))
         self.current_iter = 0
 
+        self.pressure_contact_num = ti.field(dtype=int, shape=())
+        self.divergence_contact_num = ti.field(dtype=int, shape=())
+        self.pressure_contact_num[None] = 0
+        self.divergence_contact_num[None] = 0
+
     @ti.func
     def cubic_kernel(self, r_norm):
         res = ti.cast(0.0, ti.f32)

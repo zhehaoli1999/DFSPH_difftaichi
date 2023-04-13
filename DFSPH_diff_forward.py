@@ -300,6 +300,7 @@ class DFSPHSolver(SPHBase):
                 vel_change =  -self.dt[None] * 1.0 * ret.k_i * grad_p_j
                 ret.dv += vel_change
                 if self.ps.is_dynamic_rigid_body(p_j, step):
+                    self.divergence_contact_num[None] += 1
                     r_id = self.ps.object_id[step, p_j]
                     force = -vel_change * (1 / self.dt[None]) * self.ps.density[step, p_i] * self.ps.m_V[step, p_i]
                     self.ps.rigid_force[step, r_id] += force
@@ -387,6 +388,7 @@ class DFSPHSolver(SPHBase):
                 vel_change = - self.dt[None] * 1.0 * ret.k_i * grad_p_j  # kj already contains inverse density
                 ret.dv += vel_change
                 if self.ps.is_dynamic_rigid_body(p_j, step):
+                    self.pressure_contact_num[None] += 1
                     r_id = self.ps.object_id[step, p_j]
                     force = -vel_change * (1 / self.dt[None]) * self.ps.density[step, p_i] * self.ps.m_V[step, p_i]
                     self.ps.rigid_force[step, r_id] += force
@@ -401,6 +403,9 @@ class DFSPHSolver(SPHBase):
                 self.ps.v[step, iter + 1, p_i] = self.ps.v[step, iter, p_i] + self.dt[None] * self.ps.acceleration[step, p_i]
 
     def substep(self):
+        self.pressure_contact_num[None] = 0
+        self.divergence_contact_num[None] = 0
+
         print_debug("compute density")
         self.compute_densities(self.step_num, self.iter_num[self.step_num])
         print_debug("compute factor")
@@ -408,13 +413,19 @@ class DFSPHSolver(SPHBase):
         if self.enable_divergence_solver:
             print_debug("divergence solve")
             self.divergence_solve()
+            self.ps.debug_print(f"after divergence solve (iter number {self.divergence_iter_num[self.step_num]} contact number {self.divergence_contact_num[None]})\n")
+            self.ps.debug_print_rigid_force(self.step_num)
         print_debug("non pressure force")
         self.compute_non_pressure_forces(self.step_num, self.iter_num[self.step_num])
+        self.ps.debug_print("after viscosity\n")
+        self.ps.debug_print_rigid_force(self.step_num)
         print_debug("predict velocity")
         self.predict_velocity(self.step_num, self.iter_num[self.step_num])
         self.iter_num[self.step_num] += 1
         print_debug("pressure solve")
         self.pressure_solve()
+        self.ps.debug_print(f"after pressure solve (iter number {self.pressure_iter_num[self.step_num]} contact number {self.pressure_contact_num[None]})\n")
+        self.ps.debug_print_rigid_force(self.step_num)
         print_debug("advect")
         self.advect(self.step_num, self.iter_num[self.step_num])
 
