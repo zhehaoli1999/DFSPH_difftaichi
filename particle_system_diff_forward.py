@@ -105,7 +105,7 @@ class ParticleSystem:
         self.steps = self.cfg.get_cfg("stepNum")
         self.max_iter = self.cfg.get_cfg("maxIterNum")
 
-        self.debug_mode = True
+        self.debug_mode = False
         if self.debug_mode:
             self.debug_file = open("debug.log", 'w')
 

@@ -317,7 +317,7 @@ class SPHBase:
                 self.ps.v[step, iter, p_i] = self.ps.rigid_v[step + 1, r] + self.ps.rigid_omega[step + 1, r].cross(x_rel)
 
     def step(self, step):
-        print(f"------------step {step}------------")
+        # print(f"------------step {step}------------")
         last_iter = 0
         if step != 0:
             last_iter = self.iter_num[step - 1]
@@ -344,9 +344,12 @@ class SPHBase:
     
     
     @ti.kernel
-    def update(self, lr: float, index: int):
-        print("v grad ", index, self.ps.loss.dual[None])
-        self.ps.rigid_adjust_v[index] -= self.ps.loss.dual[None] * lr
+    def update(self, lr: float, grad: ti.types.vector(3, float)):
+        for i in range(3):
+            self.ps.rigid_adjust_v[i] -= grad[i] * lr
+        print("adjust v:")
+        for i in range(3):
+            print(self.ps.rigid_adjust_v[i])
     
     @ti.kernel
     def compute_loss(self, step: int):
