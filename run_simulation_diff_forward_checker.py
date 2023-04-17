@@ -61,7 +61,10 @@ if __name__ == "__main__":
 
     scene = ti.ui.Scene()
     camera = ti.ui.Camera()
-    camera.position(5.5, 2.5, 4.0)
+    
+    camera_position = ti.Vector([5.5, 2.5, 4.0])
+    camera_move_step = 0.01
+    camera.position(camera_position[0], camera_position[1], camera_position[2])
     camera.up(0.0, 1.0, 0.0)
     camera.lookat(-1.0, 0.0, 0.0)
     camera.fov(70)
@@ -97,12 +100,44 @@ if __name__ == "__main__":
         box_lines_indices[i] = val
 
     solver.initialize_from_restart()
-    while not solver.end(cnt_frame):
-        print(cnt_frame)
-        solver.step(cnt_frame)
-        cnt_frame += 1
-        ps.copy_to_vis_buffer(step=cnt_frame - 1, invisible_objects=invisible_objects)
-        camera.track_user_inputs(window, movement_speed=movement_speed, hold_key=ti.ui.LMB)
+
+    paused = True
+
+    while window.running:
+        if not paused:
+            print(cnt_frame)
+            solver.step(cnt_frame)
+            cnt_frame += 1
+            ps.copy_to_vis_buffer(step=cnt_frame - 1, invisible_objects=invisible_objects)
+            if solver.end(cnt_frame):
+                break
+
+        for e in window.get_events(ti.ui.PRESS):
+            if e.key == ti.ui.SPACE:
+                paused = not paused
+            elif e.key == 'r':
+                solver.initialize_from_restart()
+                cnt_frame = 0
+            elif e.key == 'p':
+                print(camera_position)
+        
+        if window.is_pressed('w'):
+            camera_position[0] += camera_move_step
+        if window.is_pressed('s'):
+            camera_position[0] -= camera_move_step
+        if window.is_pressed('a'):
+            camera_position[2] += camera_move_step
+        if window.is_pressed('d'):
+            camera_position[2] -= camera_move_step
+        if window.is_pressed('z'):
+            camera_position[1] += camera_move_step
+        if window.is_pressed('x'):
+            camera_position[1] -= camera_move_step
+        
+        camera.position(camera_position[0], camera_position[1], camera_position[2])
+        camera.up(0.0, 1.0, 0.0)
+        camera.lookat(-1.0, 0.0, 0.0)
+        camera.fov(70)
         scene.set_camera(camera)
 
         scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
