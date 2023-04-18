@@ -9,7 +9,7 @@ from DFSPH_diff_forward import DFSPHSolver
 arch = ti.gpu
 assert arch is ti.gpu or arch is ti.cpu
 
-ti.init(arch=arch, device_memory_fraction=0.5)
+ti.init(arch=arch, device_memory_fraction=0.9)
 
 def build_solver(ps: ParticleSystem):
     solver_type = ps.cfg.get_cfg("simulationMethod")
@@ -31,18 +31,6 @@ if __name__ == "__main__":
     scene_path = args.scene_file
     config = SimConfig(scene_file_path=scene_path)
     scene_name = scene_path.split("/")[-1].split(".")[0]
-
-    substeps = config.get_cfg("numberOfStepsPerRenderUpdate")
-    output_frames = config.get_cfg("exportFrame")
-    output_interval = int(0.016 / config.get_cfg("timeStepSize"))
-    output_ply = config.get_cfg("exportPly")
-    output_obj = config.get_cfg("exportObj")
-    series_prefix = "{}_output/particle_object_{}.ply".format(scene_name, "{}")
-    if output_frames:
-        os.makedirs(f"{scene_name}_output_img", exist_ok=True)
-    if output_ply:
-        os.makedirs(f"{scene_name}_output", exist_ok=True)
-
 
     ps = ParticleSystem(config, GGUI=True, arch=arch)
 
@@ -80,24 +68,6 @@ if __name__ == "__main__":
     invisible_objects = config.get_cfg("invisibleObjects")
     if not invisible_objects:
         invisible_objects = []
-
-    # Draw the lines for domain
-    x_max, y_max, z_max = config.get_cfg("domainEnd")
-    box_anchors = ti.Vector.field(3, dtype=ti.f32, shape = 8)
-    box_anchors[0] = ti.Vector([0.0, 0.0, 0.0])
-    box_anchors[1] = ti.Vector([0.0, y_max, 0.0])
-    box_anchors[2] = ti.Vector([x_max, 0.0, 0.0])
-    box_anchors[3] = ti.Vector([x_max, y_max, 0.0])
-
-    box_anchors[4] = ti.Vector([0.0, 0.0, z_max])
-    box_anchors[5] = ti.Vector([0.0, y_max, z_max])
-    box_anchors[6] = ti.Vector([x_max, 0.0, z_max])
-    box_anchors[7] = ti.Vector([x_max, y_max, z_max])
-
-    box_lines_indices = ti.field(int, shape=(2 * 12))
-
-    for i, val in enumerate([0, 1, 0, 2, 1, 3, 2, 3, 4, 5, 4, 6, 5, 7, 6, 7, 0, 4, 1, 5, 2, 6, 3, 7]):
-        box_lines_indices[i] = val
 
     solver.initialize_from_restart()
 
@@ -143,7 +113,6 @@ if __name__ == "__main__":
         scene.point_light((2.0, 2.0, 2.0), color=(1.0, 1.0, 1.0))
         scene.particles(ps.x_vis_buffer, radius=ps.particle_radius, per_vertex_color=ps.color_vis_buffer)
 
-        scene.lines(box_anchors, indices=box_lines_indices, color = (0.99, 0.68, 0.28), width = 1.0)
         canvas.scene(scene)
         window.show()
     solver.compute_loss(ps.steps - 1)

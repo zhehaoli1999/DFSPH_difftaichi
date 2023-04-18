@@ -315,6 +315,8 @@ class SPHBase:
                 x_rel = self.ps.x_0[step, p_i] - self.ps.rigid_rest_cm[r]
                 self.ps.x_buffer[step, p_i] = self.ps.rigid_x[step + 1, r] + quaternion2rotation_matrix(self.ps.rigid_quaternion[step + 1, r]) @ x_rel
                 self.ps.v[step, iter, p_i] = self.ps.rigid_v[step + 1, r] + self.ps.rigid_omega[step + 1, r].cross(x_rel)
+            elif self.ps.is_static_rigid_body(p_i, step):
+                self.ps.x_buffer[step, p_i] = self.ps.x[step, p_i]
 
     def step(self, step):
         # print(f"------------step {step}------------")
@@ -333,10 +335,6 @@ class SPHBase:
         print_debug("rigid body")
         self.solve_rigid_body(step)
         self.update_rigid_particle_info(step, self.iter_num[step])
-        if self.ps.dim == 2:
-            self.enforce_boundary_2D(step, self.iter_num[step], self.ps.material_fluid)
-        elif self.ps.dim == 3:
-            self.enforce_boundary_3D(step, self.iter_num[step], self.ps.material_fluid)
     
 
     def end(self, step):

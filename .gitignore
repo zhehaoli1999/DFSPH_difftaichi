@@ -5,3 +5,5 @@ imgui.ini
 temp
 
 *.log
+
+cache

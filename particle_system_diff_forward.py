@@ -3,6 +3,8 @@ import numpy as np
 import trimesh as tm
 from functools import reduce
 from config_builder import SimConfig
+import open3d as o3d
+from pathlib import Path
 
 
 @ti.data_oriented
@@ -533,31 +535,73 @@ class ParticleSystem:
 
     def load_rigid_body(self, rigid_body):
         obj_id = rigid_body["objectId"]
-        mesh = tm.load(rigid_body["geometryFile"])
-        mesh.apply_scale(rigid_body["scale"])
-        offset = np.array(rigid_body["translation"])
+        # mesh = tm.load(rigid_body["geometryFile"])
+        # mesh.apply_scale(rigid_body["scale"])
+        # offset = np.array(rigid_body["translation"])
 
+        # angle = rigid_body["rotationAngle"] / 360 * 2 * 3.1415926
+        # direction = rigid_body["rotationAxis"]
+        # rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
+        # mesh.apply_transform(rot_matrix)
+        # mesh.vertices += offset
+        
+        # # Backup the original mesh for exporting obj
+        # mesh_backup = mesh.copy()
+        # rigid_body["mesh"] = mesh_backup
+        # is_success = tm.repair.fill_holes(mesh)
+        #     # print("Is the mesh successfully repaired? ", is_success)
+        # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
+        # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
+        # # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
+        # # voxelized_mesh.show()
+        # voxelized_points_np = voxelized_mesh.points
+        # print(f"rigid body {obj_id} num: {voxelized_points_np.shape[0]}")
+        # rigid_body["restPosition"] = voxelized_points_np
+        # rigid_body["restCenterOfMass"] = voxelized_points_np.mean(axis=0)
+
+        sample_const = 1.2
+
+        filename = rigid_body["geometryFile"]
+        o3dmesh = o3d.io.read_triangle_mesh(filename)
+        scale = rigid_body["scale"]
+        o3dmesh.scale(scale=scale, center=np.array([0.0, 0.0, 0.0]))
+        area = o3dmesh.get_surface_area()
+        sample_num = int(area / (self.particle_radius ** 2) * sample_const) # here the sample number can be changed
         angle = rigid_body["rotationAngle"] / 360 * 2 * 3.1415926
-        direction = rigid_body["rotationAxis"]
-        rot_matrix = tm.transformations.rotation_matrix(angle, direction, mesh.vertices.mean(axis=0))
-        mesh.apply_transform(rot_matrix)
-        mesh.vertices += offset
+        direction = np.array(rigid_body["rotationAxis"])
+        rot_matrix = o3d.geometry.get_rotation_matrix_from_axis_angle(angle * direction)
+        o3dmesh.rotate(rot_matrix, o3dmesh.get_center())
+        translation = np.array(rigid_body["translation"])
+        o3dmesh.translate(translation)
+        print(f"Area: {area}, sample number: {sample_num}")
+
+        path = Path(filename)
+        geoname = path.stem
+        cache_path = path.parent.joinpath("cache")
+        if not cache_path.exists():
+            cache_path.mkdir(parents=True)
+            print(cache_path)
+        cache_name = f"{geoname}_{scale:.2f}_{rigid_body['rotationAngle']}\
+_{direction[0]:.1f}-{direction[1]:.1f}-{direction[2]:.1f}\
+_{translation[0]:.1f}-{translation[1]:.1f}-{translation[2]:.1f}_{sample_num}.ply"
+
+        cache_filename = cache_path.joinpath(cache_name)
+        if cache_filename.exists():
+            pcd = o3d.io.read_point_cloud(str(cache_filename))
+            print(f"using cache {cache_filename.resolve()} for sampling")
+        else:
+            pcd = o3dmesh.sample_points_poisson_disk(number_of_points=sample_num)
+            o3d.io.write_point_cloud(filename=str(cache_filename), pointcloud=pcd, write_ascii=True)
+            print(f"successfully write sampling cache to {cache_filename.resolve()}")
         
-        # Backup the original mesh for exporting obj
-        mesh_backup = mesh.copy()
-        rigid_body["mesh"] = mesh_backup
-        is_success = tm.repair.fill_holes(mesh)
-            # print("Is the mesh successfully repaired? ", is_success)
-        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter)
-        voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).fill()
-        # voxelized_mesh = mesh.voxelized(pitch=self.particle_diameter).hollow()
-        # voxelized_mesh.show()
-        voxelized_points_np = voxelized_mesh.points
-        print(f"rigid body {obj_id} num: {voxelized_points_np.shape[0]}")
-        rigid_body["restPosition"] = voxelized_points_np
-        rigid_body["restCenterOfMass"] = voxelized_points_np.mean(axis=0)
+        points_np = np.asarray(pcd.points)
+        rigid_body["restCenterOfMass"] = points_np.mean(axis=0)
+        print(f"rigid body {obj_id} num: {points_np.shape[0]}")
+
+        o3dmesh.compute_vertex_normals()
+        o3d.visualization.draw_geometries([o3dmesh, pcd])
         
-        return voxelized_points_np
+        return points_np
 
 
     def compute_cube_particle_num(self, start, end):
