@@ -257,7 +257,6 @@ class ParticleSystem:
             self.rigid_v0[obj_id] = velocity
             self.rigid_omega0[obj_id] = angular_velocity
             self.is_rigid[obj_id] = 1
-            print(obj_id, self.is_rigid[obj_id])
             self.rigid_rest_cm[obj_id] = rigid_body["restCenterOfMass"]
             self.add_particles(obj_id,
                                num_particles_obj,
@@ -559,7 +558,7 @@ class ParticleSystem:
         # rigid_body["restPosition"] = voxelized_points_np
         # rigid_body["restCenterOfMass"] = voxelized_points_np.mean(axis=0)
 
-        sample_const = 1.2
+        sample_const = rigid_body["sampleConst"]
 
         filename = rigid_body["geometryFile"]
         o3dmesh = o3d.io.read_triangle_mesh(filename)
@@ -599,7 +598,7 @@ _{translation[0]:.1f}-{translation[1]:.1f}-{translation[2]:.1f}_{sample_num}.ply
         print(f"rigid body {obj_id} num: {points_np.shape[0]}")
 
         o3dmesh.compute_vertex_normals()
-        o3d.visualization.draw_geometries([o3dmesh, pcd])
+        # o3d.visualization.draw_geometries([o3dmesh, pcd])
         
         return points_np
 

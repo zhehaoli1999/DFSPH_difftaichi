@@ -1,9 +1,9 @@
 {
 	"Configuration": 
 	{
-        "domainStart": [-1.0, -1.0, -1.0],
-        "domainEnd": [2.0, 2.0, 2.0],
-		"particleRadius": 0.01,
+        "domainStart": [0.0, 0.0, 0.0],
+        "domainEnd": [3.0, 3.0, 3.0],
+		"particleRadius": 0.025,
 		"numberOfStepsPerRenderUpdate": 1,
 		"density0": 1000, 
 		"simulationMethod": 4,
@@ -15,40 +15,43 @@
 		"exportFrame": false,
 		"exportPly": false,
 		"exportObj": false,
-		"stepNum": 100,
-		"maxIterNum": 20
+		"stepNum": 150,
+		"maxIterNum": 20,
+		"invisibleObjects": [2]
 	},
 	"RigidBodies": [
 		{
             "objectId": 1,
 			"geometryFile": "./data/models/armadillo_small.obj",
-			"translation": [0.5, 2.0, 0.5],
+			"translation": [1.5, 4.0, 1.5],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 180,
 			"scale": 0.25,
 			"velocity": [0.0, -5.0, 0.0],
 			"density": 300.0,
 			"color": [255, 255, 255], 
-			"isDynamic": true
+			"isDynamic": true,
+			"sampleConst": 1.0
 		},
 		{
             "objectId": 2,
 			"geometryFile": "./data/models/UnitBox.obj",
-			"translation": [0.5, 0.5, 0.5],
+			"translation": [1.5, 1.5, 1.5],
 			"rotationAxis": [0, 1, 0],
 			"rotationAngle": 0,
 			"scale": 1.0,
 			"velocity": [0.0, 0.0, 0.0],
 			"density": 5000.0,
 			"color": [255, 255, 255], 
-			"isDynamic": false
+			"isDynamic": false,
+			"sampleConst": 1.0
 		}
 	],
 	"FluidBlocks": [
 		{
             "objectId": 0,
-			"start": [0.08, 0.08, 0.08],
-			"end": [0.92, 0.50, 0.92],
+			"start": [1.08, 1.08, 1.08],
+			"end": [1.92, 1.50, 1.92],
 			"translation": [0.0, 0.0, 0.0],
 			"scale": [1, 1, 1],
 			"velocity": [0.0, 0.0, 0.0],
