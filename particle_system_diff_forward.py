@@ -20,7 +20,7 @@ class CPUPrefixSumExecutor:
 
 @ti.data_oriented
 class ParticleSystem:
-    def __init__(self, config: SimConfig, arch=ti.gpu, GGUI=False):
+    def __init__(self, config: SimConfig, arch=ti.gpu, GGUI=False, debug=False):
         self.cfg = config
         self.GGUI = GGUI
 
@@ -107,7 +107,7 @@ class ParticleSystem:
         self.steps = self.cfg.get_cfg("stepNum")
         self.max_iter = self.cfg.get_cfg("maxIterNum")
 
-        self.debug_mode = False
+        self.debug_mode = debug
         if self.debug_mode:
             self.debug_file = open("debug.log", 'w')
 

@@ -44,7 +44,7 @@ if __name__ == "__main__":
         os.makedirs(f"{scene_name}_output", exist_ok=True)
 
 
-    ps = ParticleSystem(config, GGUI=True, arch=arch)
+    ps = ParticleSystem(config, GGUI=True, arch=arch, debug=True)
 
     solver = build_solver(ps)
     solver.initialize()
@@ -63,40 +63,44 @@ if __name__ == "__main__":
             solver.initialize_from_restart()
             while not solver.end(cnt_frame):
                 solver.step(cnt_frame)
+                print(cnt_frame)
                 cnt_frame += 1
             solver.compute_loss(ps.steps - 1)
             cnt_frame = 0
 
         loss_grad[0] = ps.loss.dual[None]
         
-        with ti.ad.FwdMode(loss=ps.loss, param=ps.rigid_adjust_v, seed=[0.0,1.0,0.0]):
-            solver.initialize_from_restart()
-            while not solver.end(cnt_frame):
-                solver.step(cnt_frame)
-                cnt_frame += 1
-            solver.compute_loss(ps.steps - 1)
-            cnt_frame = 0
+        # with ti.ad.FwdMode(loss=ps.loss, param=ps.rigid_adjust_v, seed=[0.0,1.0,0.0]):
+        #     solver.initialize_from_restart()
+        #     while not solver.end(cnt_frame):
+        #         solver.step(cnt_frame)
+        #         cnt_frame += 1
+        #     solver.compute_loss(ps.steps - 1)
+        #     cnt_frame = 0
 
-        loss_grad[1] = ps.loss.dual[None]
+        # loss_grad[1] = ps.loss.dual[None]
         
-        with ti.ad.FwdMode(loss=ps.loss, param=ps.rigid_adjust_v, seed=[0.0,0.0,1.0]):
-            solver.initialize_from_restart()
-            while not solver.end(cnt_frame):
-                solver.step(cnt_frame)
-                cnt_frame += 1
-            solver.compute_loss(ps.steps - 1)
-            cnt_frame = 0
+        # with ti.ad.FwdMode(loss=ps.loss, param=ps.rigid_adjust_v, seed=[0.0,0.0,1.0]):
+        #     solver.initialize_from_restart()
+        #     while not solver.end(cnt_frame):
+        #         solver.step(cnt_frame)
+        #         cnt_frame += 1
+        #     solver.compute_loss(ps.steps - 1)
+        #     cnt_frame = 0
         
-        loss_grad[2] = ps.loss.dual[None]
+        # loss_grad[2] = ps.loss.dual[None]
 
-        current_loss = ps.loss[None]
-        losses.append(current_loss)
-        print("loss: ", current_loss)
-        print("loss grad: ", loss_grad)
+        # current_loss = ps.loss[None]
+        # losses.append(current_loss)
+        # print("loss: ", current_loss)
+        # print("loss grad: ", loss_grad)
 
-        if current_loss < 1e-3 or opt_time > MAX_OPT_NUM:
-            print(losses)
-            break
-        solver.update(lr, loss_grad)
+        ps.print_rigid_grad_info(ps.steps-1, "rigid.log")
+        exit()
+
+        # if current_loss < 1e-3 or opt_time > MAX_OPT_NUM:
+        #     print(losses)
+        #     break
+        # solver.update(lr, loss_grad)
 
     ps.close()
