@@ -55,4 +55,16 @@ rigid-fluid coupling for incompressible SPH. ACM Transactions on Graphics 31, 4 
 
 ## Acknowledgement
 Implementation is largely inspired by [SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH).
- 
+
+## Diff-Taichi with DFSPH
+Try 
+```
+python run_simulation_diff_forward_checker.py --scene_file ./data/scenes/armadillo_bath_small_rigid_box.json
+```
+to enable GPU scene preview.
+
+Try
+```
+python run_simulation_diff_forward.py --scene_file ./data/scenes/armadillo_bath_small_rigid_box.json
+```
+to calculate gradient in forward mode autodiff
